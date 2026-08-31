@@ -1,0 +1,606 @@
+# ---------------------------------------------------------------------------
+# SmartBoard manifest — Nusatel
+#
+# This is the ENTIRE project-specific surface of the AI board. The engine, the
+# SQL compiler, the tool schemas, the command validator and the browser runtime
+# are all generic; this file is what makes them speak telco.
+#
+# The safety rule the whole design rests on:
+#   Every SQL fragment below (`from`, `joins`, `expr`, `columns`) is authored by
+#   us and shipped with the source, so it is trusted for exactly the same reason
+#   backend/routers/*.py is trusted. Everything arriving from the model is
+#   either an IDENTIFIER that must resolve against this catalog, or a VALUE that
+#   becomes a bound parameter. There is no third category, which is why the
+#   model cannot inject SQL even in principle.
+#
+# To teach the assistant a new number, add a metric here. Nothing else changes:
+# the tool schema, the system prompt and the chart options all derive from this.
+# ---------------------------------------------------------------------------
+
+name: nusatel
+title:
+  en: Nusatel — Network Intelligence
+  zh: Nusatel — 网络智能中枢
+  ms: Nusatel — Perisikan Rangkaian
+
+locales: [en, zh, ms]
+currency: RM
+
+source:
+  adapter: sqlite
+  path: ../nusatel.db          # resolved relative to this manifest
+  mode: readonly
+
+limits:
+  max_rows: 5000
+  statement_timeout_ms: 8000
+
+default_time_dim: month
+
+# Regional managers see only the states assigned to them in `region_assignments`.
+# The predicate is appended AFTER every caller-supplied filter and uses its own
+# parameter namespace, so no combination of model-chosen filters can escape it.
+tenancy:
+  hook: backend.board_security:scope_by_state
+
+# ---------------------------------------------------------------------------
+# Datasets
+#
+# Every metric in a single query must belong to one dataset. SmartBoard refuses
+# to invent a cross-fact join — "revenue and latency" is two queries and two
+# panels, not one hallucinated JOIN. If you genuinely need a cross-fact number,
+# you model it here as a new dataset; you do not let the model improvise it.
+#
+# Every dataset below reaches `states st`, which is what makes the tenancy
+# predicate universal. See backend/board_security.py.
+# ---------------------------------------------------------------------------
+datasets:
+  network:
+    description: Daily per-site radio KPIs. 2,500 sites × 18 months — the operational spine.
+    from: network_kpis k
+    joins:
+      - JOIN sites s ON s.id = k.site_id
+      - JOIN states st ON st.id = s.state_id
+
+  sites:
+    description: The site estate itself — one row per mast, with technology and vendor.
+    from: sites s
+    joins:
+      - JOIN states st ON st.id = s.state_id
+
+  subscribers:
+    description: Monthly subscriber base, net adds, churn and ARPU by state and plan.
+    from: subscriber_stats ss
+    joins:
+      - JOIN states st ON st.id = ss.state_id
+
+  revenue:
+    description: Monthly revenue by state and service line. Exec-only.
+    from: revenue_records rr
+    joins:
+      - JOIN states st ON st.id = rr.state_id
+
+  costs:
+    description: Monthly network and commercial cost by category. Exec-only.
+    from: cost_records cr
+    joins:
+      - JOIN states st ON st.id = cr.state_id
+
+  alarms:
+    description: Network fault alarms raised against sites.
+    from: alarms al
+    joins:
+      - JOIN sites s ON s.id = al.site_id
+      - JOIN states st ON st.id = s.state_id
+
+  tickets:
+    description: Customer care contacts, with resolution time and satisfaction.
+    from: tickets tk
+    joins:
+      - JOIN states st ON st.id = tk.state_id
+
+# ---------------------------------------------------------------------------
+# Metrics
+#
+# `direction` tells the browser which way is good, so a rising churn rate
+# renders red and a rising download speed renders green without anyone writing
+# a conditional in a chart component. `format` drives the number formatter.
+# `description` is the only place the model learns domain nuance, so it is worth
+# writing well.
+# ---------------------------------------------------------------------------
+metrics:
+
+  # -- radio network -------------------------------------------------------
+  availability_pct:
+    dataset: network
+    expr: AVG(k.availability_pct)
+    label: { en: Availability, zh: 可用率, ms: Kebolehsediaan }
+    unit: "%"
+    format: percent
+    direction: up_good
+    description: >
+      Share of the day a site was carrying traffic. The internal SLA is 99.0%;
+      below 98 on a run of days means a site needs a truck roll, not a reset.
+
+  avg_download_mbps:
+    dataset: network
+    expr: AVG(k.download_mbps)
+    label: { en: Download speed, zh: 下载速度, ms: Kelajuan muat turun }
+    unit: Mbps
+    format: number
+    direction: up_good
+    description: >
+      Mean measured downlink throughput. 4G sites should hold above 35 Mbps and
+      5G above 200. A 4G site under 20 is usually congestion rather than a fault.
+
+  avg_upload_mbps:
+    dataset: network
+    expr: AVG(k.upload_mbps)
+    label: { en: Upload speed, zh: 上传速度, ms: Kelajuan muat naik }
+    unit: Mbps
+    format: number
+    direction: up_good
+
+  avg_latency_ms:
+    dataset: network
+    expr: AVG(k.latency_ms)
+    label: { en: Latency, zh: 时延, ms: Kependaman }
+    unit: ms
+    format: number
+    direction: down_good
+    description: Round-trip time. 4G runs near 38 ms, 5G near 16 ms. Above 60 is felt by users.
+
+  drop_rate_pct:
+    dataset: network
+    expr: AVG(k.drop_rate_pct)
+    label: { en: Drop rate, zh: 掉话率, ms: Kadar gugur }
+    unit: "%"
+    format: percent
+    direction: down_good
+    description: >
+      Share of sessions dropped. Anything under 1% is normal; sustained above
+      1.5% is the clearest early warning of congestion there is.
+
+  congestion_pct:
+    dataset: network
+    expr: AVG(k.congestion_pct)
+    label: { en: Congestion, zh: 拥塞度, ms: Kesesakan }
+    unit: "%"
+    format: percent
+    direction: down_good
+    description: >
+      Share of the busy hour spent above the capacity threshold. Over 70% means
+      the cell needs a carrier added or a split.
+
+  traffic_tb:
+    dataset: network
+    expr: SUM(k.traffic_gb) / 1024.0
+    label: { en: Data traffic, zh: 数据流量, ms: Trafik data }
+    unit: TB
+    format: number
+    direction: up_good
+    description: Total carried data volume. Growing about 25% a year across the network.
+
+  kpi_day_count:
+    dataset: network
+    expr: COUNT(*)
+    label: { en: Site-days measured, zh: 站点天数, ms: Hari-tapak diukur }
+    unit: site-days
+    format: number
+    direction: neutral
+
+  # -- the site estate -----------------------------------------------------
+  site_count:
+    dataset: sites
+    expr: COUNT(*)
+    label: { en: Sites, zh: 基站数, ms: Tapak }
+    unit: sites
+    format: number
+    direction: neutral
+
+  sites_5g:
+    dataset: sites
+    expr: SUM(CASE WHEN s.technology = '5G' THEN 1 ELSE 0 END)
+    label: { en: 5G sites, zh: 5G 基站, ms: Tapak 5G }
+    unit: sites
+    format: number
+    direction: up_good
+
+  share_5g_pct:
+    dataset: sites
+    expr: 100.0 * SUM(CASE WHEN s.technology = '5G' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)
+    label: { en: 5G share of sites, zh: 5G 占比, ms: Bahagian 5G }
+    unit: "%"
+    format: percent
+    direction: up_good
+    description: >
+      Share of the site estate carrying 5G. The national rollout target is 40%
+      by the end of the plan; the Klang Valley and Penang lead, the east coast lags.
+
+  sites_on_air:
+    dataset: sites
+    expr: SUM(CASE WHEN s.status = 'on_air' THEN 1 ELSE 0 END)
+    label: { en: Sites on air, zh: 在网基站, ms: Tapak beroperasi }
+    unit: sites
+    format: number
+    direction: up_good
+
+  avg_site_age_days:
+    dataset: sites
+    expr: AVG(julianday('now') - julianday(s.on_air_date))
+    label: { en: Average site age, zh: 平均站龄, ms: Purata usia tapak }
+    unit: days
+    format: number
+    direction: neutral
+
+  # -- subscribers ---------------------------------------------------------
+  subscribers_total:
+    dataset: subscribers
+    expr: SUM(ss.subscribers)
+    label: { en: Subscribers, zh: 用户数, ms: Pelanggan }
+    unit: subs
+    format: number
+    direction: up_good
+    description: Closing subscriber base for the month. Sum across plans for the total.
+
+  net_adds:
+    dataset: subscribers
+    expr: SUM(ss.net_adds)
+    label: { en: Net adds, zh: 净增用户, ms: Tambahan bersih }
+    unit: subs
+    format: number
+    direction: up_good
+    description: Gross additions less disconnections. Negative means the base is shrinking.
+
+  churn_rate_pct:
+    dataset: subscribers
+    expr: AVG(ss.churn_rate_pct)
+    label: { en: Churn rate, zh: 流失率, ms: Kadar peralihan }
+    unit: "%"
+    format: percent
+    direction: down_good
+    description: >
+      Monthly share of subscribers who left. Prepaid runs near 2.9%, postpaid
+      near 1.1%, fibre near 0.8%. A half-point move on prepaid is a big deal.
+
+  arpu_myr:
+    dataset: subscribers
+    expr: AVG(ss.arpu_myr)
+    label: { en: ARPU, zh: 每用户收入, ms: ARPU }
+    unit: MYR/month
+    format: currency
+    direction: up_good
+    description: >
+      Average revenue per user per month. Prepaid about RM 31, postpaid RM 82,
+      fibre RM 128. Prepaid ARPU has been eroding a couple of percent a year.
+
+  # -- financial (exec only — see backend/board_security.py) ---------------
+  revenue_myr:
+    dataset: revenue
+    expr: SUM(rr.revenue_myr)
+    label: { en: Revenue, zh: 收入, ms: Hasil }
+    unit: MYR
+    format: currency
+    direction: up_good
+
+  cost_myr:
+    dataset: costs
+    expr: SUM(cr.cost_myr)
+    label: { en: Operating cost, zh: 运营成本, ms: Kos operasi }
+    unit: MYR
+    format: currency
+    direction: down_good
+
+  # -- faults --------------------------------------------------------------
+  alarm_count:
+    dataset: alarms
+    expr: COUNT(*)
+    label: { en: Alarms, zh: 告警数, ms: Penggera }
+    unit: alarms
+    format: number
+    direction: down_good
+
+  open_alarm_count:
+    dataset: alarms
+    expr: SUM(CASE WHEN al.status = 'open' THEN 1 ELSE 0 END)
+    label: { en: Open alarms, zh: 未处理告警, ms: Penggera terbuka }
+    unit: alarms
+    format: number
+    direction: down_good
+
+  critical_alarm_count:
+    dataset: alarms
+    expr: SUM(CASE WHEN al.severity = 'critical' THEN 1 ELSE 0 END)
+    label: { en: Critical alarms, zh: 严重告警, ms: Penggera kritikal }
+    unit: alarms
+    format: number
+    direction: down_good
+
+  avg_alarm_duration_min:
+    dataset: alarms
+    expr: AVG(al.duration_min)
+    label: { en: Mean time to repair, zh: 平均修复时长, ms: Purata masa baiki }
+    unit: min
+    format: number
+    direction: down_good
+    description: Mean minutes from alarm raised to cleared. Criticals should close inside four hours.
+
+  # -- customer care -------------------------------------------------------
+  ticket_count:
+    dataset: tickets
+    expr: COUNT(*)
+    label: { en: Tickets, zh: 工单数, ms: Tiket }
+    unit: tickets
+    format: number
+    direction: down_good
+
+  open_ticket_count:
+    dataset: tickets
+    expr: SUM(CASE WHEN tk.status = 'open' THEN 1 ELSE 0 END)
+    label: { en: Open tickets, zh: 未结工单, ms: Tiket terbuka }
+    unit: tickets
+    format: number
+    direction: down_good
+
+  avg_resolution_hours:
+    dataset: tickets
+    expr: AVG(tk.resolution_hours)
+    label: { en: Resolution time, zh: 解决时长, ms: Masa penyelesaian }
+    unit: h
+    format: number
+    direction: down_good
+    description: Mean hours from a customer contact to closure. The care target is 24 hours.
+
+  csat_avg:
+    dataset: tickets
+    expr: AVG(tk.csat)
+    label: { en: Satisfaction, zh: 满意度, ms: Kepuasan }
+    unit: /5
+    format: number
+    direction: up_good
+    description: Post-contact score out of five. Below 3.5 on a category is a real problem.
+
+# ---------------------------------------------------------------------------
+# Dimensions
+#
+# One dimension id, one SQL expression per dataset it exists on. The model names
+# the id; the compiler picks the right column for whichever dataset the metrics
+# resolved to. A dimension with no column for that dataset is refused with a
+# message the model reliably self-corrects from.
+# ---------------------------------------------------------------------------
+dimensions:
+
+  month:
+    type: time
+    native_grain: month
+    label: { en: Month, zh: 月份, ms: Bulan }
+    description: Calendar month, YYYY-MM. The default time axis.
+    columns:
+      network: substr(k.date, 1, 7)
+      subscribers: ss.month
+      revenue: rr.month
+      costs: cr.month
+      alarms: substr(al.opened_at, 1, 7)
+      tickets: substr(tk.opened_date, 1, 7)
+      sites: substr(s.on_air_date, 1, 7)
+
+  date:
+    type: time
+    native_grain: day
+    label: { en: Date, zh: 日期, ms: Tarikh }
+    description: Calendar day, YYYY-MM-DD. Only on the datasets that store daily rows.
+    columns:
+      network: k.date
+      alarms: substr(al.opened_at, 1, 10)
+      tickets: tk.opened_date
+
+  state:
+    type: string
+    label: { en: State, zh: 州属, ms: Negeri }
+    description: Malaysian state or federal territory. Use this one for prose and bar charts.
+    values: [Johor, Kedah, Kelantan, Kuala Lumpur, Labuan, Melaka, Negeri Sembilan,
+             Pahang, Perak, Perlis, Pulau Pinang, Putrajaya, Sabah, Sarawak,
+             Selangor, Terengganu]
+    columns:
+      network: st.name
+      sites: st.name
+      subscribers: st.name
+      revenue: st.name
+      costs: st.name
+      alarms: st.name
+      tickets: st.name
+
+  state_code:
+    type: string
+    label: { en: State code, zh: 州代码, ms: Kod negeri }
+    description: >
+      Three-letter state code. This is the dimension the choropleth joins on —
+      name it together with `map_regions` whenever the answer belongs on the map.
+    values: [JHR, KDH, KTN, KUL, LBN, MLK, NSN, PHG, PLS, PNG, PJY, PRK, SBH, SGR, SWK, TRG]
+    columns:
+      network: st.code
+      sites: st.code
+      subscribers: st.code
+      revenue: st.code
+      costs: st.code
+      alarms: st.code
+      tickets: st.code
+
+  region_group:
+    type: string
+    label: { en: Region, zh: 区域, ms: Wilayah }
+    description: Commercial region. Five of them, grouping the sixteen states.
+    values: [northern, central, southern, east_coast, east_malaysia]
+    columns:
+      network: st.region_group
+      sites: st.region_group
+      subscribers: st.region_group
+      revenue: st.region_group
+      costs: st.region_group
+      alarms: st.region_group
+      tickets: st.region_group
+
+  district:
+    type: string
+    label: { en: District, zh: 区域, ms: Daerah }
+    columns:
+      network: s.district
+      sites: s.district
+      alarms: s.district
+
+  site:
+    type: string
+    label: { en: Site, zh: 基站, ms: Tapak }
+    description: Site code such as SGR-0142 — the state code plus a sequence number.
+    columns:
+      network: s.site_code
+      sites: s.site_code
+      alarms: s.site_code
+
+  site_location:
+    type: geo
+    label: { en: Site location, zh: 基站位置, ms: Lokasi tapak }
+    description: >
+      The same sites as `site`, expanded into map coordinates. Name this one with
+      `map_points` whenever the answer is about individual masts — the compiler
+      adds latitude and longitude automatically.
+    geo: { lat: s.lat, lng: s.lng }
+    columns:
+      network: s.site_code
+      sites: s.site_code
+      alarms: s.site_code
+
+  technology:
+    type: string
+    label: { en: Technology, zh: 制式, ms: Teknologi }
+    values: [3G, 4G, 5G]
+    columns:
+      network: s.technology
+      sites: s.technology
+      alarms: s.technology
+
+  vendor:
+    type: string
+    label: { en: Vendor, zh: 设备商, ms: Vendor }
+    values: [Ericsson, Huawei, Nokia, ZTE]
+    columns:
+      network: s.vendor
+      sites: s.vendor
+      alarms: s.vendor
+
+  site_status:
+    type: string
+    label: { en: Site status, zh: 基站状态, ms: Status tapak }
+    values: [on_air, maintenance, offline]
+    columns:
+      sites: s.status
+
+  plan:
+    type: string
+    label: { en: Plan, zh: 套餐, ms: Pelan }
+    values: [prepaid, postpaid, fibre]
+    columns:
+      subscribers: ss.plan
+
+  service_line:
+    type: string
+    label: { en: Service line, zh: 业务线, ms: Barisan perkhidmatan }
+    values: [mobile, fibre, enterprise]
+    columns:
+      revenue: rr.service_line
+
+  cost_category:
+    type: string
+    label: { en: Cost category, zh: 成本类别, ms: Kategori kos }
+    values: [site_rental, power, maintenance, backhaul, marketing]
+    columns:
+      costs: cr.category
+
+  severity:
+    type: string
+    label: { en: Severity, zh: 严重程度, ms: Keterukan }
+    values: [critical, major, minor]
+    columns:
+      alarms: al.severity
+
+  alarm_type:
+    type: string
+    label: { en: Alarm type, zh: 告警类型, ms: Jenis penggera }
+    values: [power, transmission, hardware, congestion, environment]
+    columns:
+      alarms: al.alarm_type
+
+  alarm_state:
+    type: string
+    label: { en: Alarm state, zh: 告警状态, ms: Keadaan penggera }
+    values: [open, resolved]
+    columns:
+      alarms: al.status
+
+  ticket_category:
+    type: string
+    label: { en: Ticket category, zh: 工单类型, ms: Kategori tiket }
+    values: [billing, coverage, speed, installation, service]
+    columns:
+      tickets: tk.category
+
+  channel:
+    type: string
+    label: { en: Channel, zh: 渠道, ms: Saluran }
+    values: [app, call_center, store]
+    columns:
+      tickets: tk.channel
+
+# ---------------------------------------------------------------------------
+# What the model may draw. A viz kind not listed here is refused server-side,
+# and even if it slipped through, the browser has no renderer registered for it
+# and nothing would appear. Two independent gates, on purpose.
+# ---------------------------------------------------------------------------
+viz:
+  enabled:
+    - stat
+    - kpi
+    - line
+    - area
+    - bar
+    - stacked_bar
+    - scatter
+    - donut
+    - gauge
+    - table
+    - map_points
+    - map_regions
+
+commands:
+  enabled:
+    - add_panel
+    - update_panel
+    - remove_panel
+    - set_filter
+    - clear_filters
+    - highlight
+    - focus_map
+    - set_layout
+    - narrate
+    - ask_clarification
+
+glossary:
+  ARPU: Average revenue per user, per month.
+  Churn: Share of subscribers who disconnected during the month.
+  Net adds: Gross new subscribers less disconnections.
+  Drop rate: Share of sessions terminated abnormally.
+  Congestion: Share of the busy hour a cell spent above its capacity threshold.
+  MTTR: Mean time to repair — minutes from alarm raised to cleared.
+  CSAT: Customer satisfaction, scored out of five after a care contact.
+  Backhaul: The transmission link from a site back into the core network.
+  Site: One physical mast. A site carries several cells.
+
+suggestions:
+  - Which states have the worst download speeds?
+  - Map 5G coverage across the country
+  - Plot data traffic for the last 12 months
+  - Why is churn rising in Selangor?
+  - Show me open critical alarms by type
+  - Compare states on congestion and drop rate
+  - Break customer tickets down by category
+  - Which sites are congested right now?

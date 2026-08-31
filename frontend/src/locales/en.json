@@ -1,0 +1,52 @@
+{
+  "brand": "Nusatel",
+  "tagline": "Network Intelligence",
+  "login": {
+    "title": "Sign in",
+    "subtitle": "A dashboard you drive by talking to it.",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "signingIn": "Signing in…",
+    "failed": "Wrong username or password.",
+    "demoAccounts": "Demo accounts",
+    "roleExec": "Executive · all 16 states, including revenue",
+    "roleNorth": "Regional · Perlis, Kedah, Penang, Perak",
+    "roleBorneo": "Regional · Sabah, Sarawak, Labuan",
+    "note": "Regional managers see fewer states and no financial metrics — enforced on the server, not in the interface."
+  },
+  "board": {
+    "assistant": "Network Assistant",
+    "placeholder": "Ask about coverage, speed, churn or alarms…",
+    "placeholderSelected": "Ask about what you selected…",
+    "footer": "Enter to send · Shift+Enter for a new line · Ctrl+click to select several",
+    "emptyTitle": "Nothing on the board",
+    "emptyBody": "The assistant cannot write SQL and cannot write UI code. It names metrics from a governed catalog and issues typed commands — every panel here was built from one of them. Ask it a question to start.",
+    "bootingTitle": "Building the board…",
+    "bootingBody": "Running the starting queries through the same guarded path the assistant uses.",
+    "errorTitle": "The board could not load its catalog",
+    "logout": "Sign out"
+  },
+  "sections": {
+    "headline": "Headline",
+    "headlineSub": "Where the network stands against target",
+    "network": "Network",
+    "commercial": "Customers and revenue"
+  },
+  "panels": {
+    "availability": "Site availability",
+    "download": "Average download speed",
+    "churn": "Churn rate",
+    "openAlarms": "Open alarms",
+    "trafficTrend": "Data traffic by month",
+    "trafficNote": "Twelve months of carried volume across the whole estate.",
+    "stateSpeed": "Download speed by state",
+    "stateSpeedNote": "Sixteen states, slowest first, against the 35 Mbps 4G target.",
+    "coverageMap": "5G share of sites by state",
+    "coverageMapNote": "The rollout so far. The Klang Valley and Penang lead; the east coast lags.",
+    "siteMap": "Sites by download speed",
+    "siteMapNote": "Every mast on the network, sized and coloured by measured throughput.",
+    "ticketMix": "Customer tickets",
+    "revenueMix": "Revenue by service line"
+  }
+}

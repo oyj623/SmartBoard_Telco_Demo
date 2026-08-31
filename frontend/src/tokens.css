@@ -1,0 +1,269 @@
+/* Nusatel — Design Tokens
+   Dark-first cool-neutral console, the way a network operations centre is lit.
+   Density: 8/10. Type: Inter + JetBrains Mono. Accent: signal cyan.
+
+   The chart palette here is read by the SmartBoard ECharts and Leaflet adapters
+   through `adapters/colour.js`, which resolves oklch to rgb first — see the note
+   at the top of that file for why that conversion has to happen. */
+
+:root {
+  /* Type */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Spacing rhythm — tight (density 8) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius */
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+  --r-4: 10px;
+  --r-pill: 999px;
+
+  /* Accent + status (shared chroma family) */
+  --accent: oklch(0.74 0.14 205);
+  --accent-soft: oklch(0.74 0.14 205 / 0.16);
+  --accent-line: oklch(0.74 0.14 205 / 0.40);
+  --accent-fg: oklch(0.18 0.02 240);
+
+  --ok: oklch(0.74 0.13 160);
+  --warn: oklch(0.80 0.13 90);
+  --high: oklch(0.75 0.15 60);
+  --crit: oklch(0.66 0.20 25);
+
+  --ok-soft: oklch(0.74 0.13 160 / 0.16);
+  --warn-soft: oklch(0.80 0.13 90 / 0.16);
+  --high-soft: oklch(0.75 0.15 60 / 0.16);
+  --crit-soft: oklch(0.66 0.20 25 / 0.16);
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 200ms;
+}
+
+/* DARK */
+body.theme-dark {
+  --bg-0: oklch(0.16 0.008 240);
+  --bg-1: oklch(0.19 0.009 240);
+  --bg-2: oklch(0.22 0.010 240);
+  --bg-3: oklch(0.26 0.011 240);
+  --hover: oklch(0.28 0.012 240);
+
+  --line:    oklch(0.30 0.012 240);
+  --line-soft: oklch(0.26 0.011 240);
+  --line-strong: oklch(0.40 0.014 240);
+
+  --fg:      oklch(0.96 0.005 240);
+  --fg-2:    oklch(0.78 0.008 240);
+  --fg-3:    oklch(0.58 0.010 240);
+  --fg-4:    oklch(0.42 0.012 240);
+
+  --grid: oklch(0.30 0.012 240 / 0.5);
+
+  /* Chart series palette — read by the SmartBoard ECharts adapter.
+     Six hues that stay distinguishable on the dark console background. */
+  --chart-1: oklch(0.74 0.14 205);
+  --chart-2: oklch(0.74 0.13 160);
+  --chart-3: oklch(0.80 0.13 90);
+  --chart-4: oklch(0.75 0.15 60);
+  --chart-5: oklch(0.70 0.14 300);
+  --chart-6: oklch(0.68 0.17 10);
+}
+
+/* LIGHT */
+body.theme-light {
+  --bg-0: oklch(0.985 0.003 240);
+  --bg-1: oklch(1 0 0);
+  --bg-2: oklch(0.975 0.004 240);
+  --bg-3: oklch(0.955 0.005 240);
+  --hover: oklch(0.945 0.006 240);
+
+  --line:    oklch(0.90 0.008 240);
+  --line-soft: oklch(0.93 0.006 240);
+  --line-strong: oklch(0.82 0.012 240);
+
+  --fg:      oklch(0.20 0.012 240);
+  --fg-2:    oklch(0.40 0.010 240);
+  --fg-3:    oklch(0.55 0.010 240);
+  --fg-4:    oklch(0.70 0.008 240);
+
+  --accent-fg: white;
+  --grid: oklch(0.85 0.008 240 / 0.7);
+
+  /* Same six hues, darkened so they hold contrast on white. */
+  --chart-1: oklch(0.56 0.14 205);
+  --chart-2: oklch(0.60 0.13 160);
+  --chart-3: oklch(0.66 0.14 90);
+  --chart-4: oklch(0.62 0.16 60);
+  --chart-5: oklch(0.56 0.15 300);
+  --chart-6: oklch(0.56 0.18 10);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-0);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.5;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; color: inherit; }
+
+::selection { background: var(--accent-soft); color: var(--fg); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; border: 2px solid var(--bg-0); }
+::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+
+/* Mono numerals */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Reusable elements */
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  position: relative;
+}
+.card-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin: 0;
+}
+.card-body { padding: 14px; }
+
+/* Pulse for live indicators */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 0 var(--ok);
+  animation: pulse-dot 1.6s var(--ease) infinite;
+}
+
+/* Shimmer for streaming/loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, var(--hover) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s var(--ease) infinite;
+}
+
+/* Marquee ticker */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: flex;
+  gap: 32px;
+  white-space: nowrap;
+  animation: ticker-scroll 60s linear infinite;
+  width: max-content;
+}
+
+/* Grid bg */
+.grid-bg {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Focus ring */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: var(--r-2);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.btn:hover { background: var(--hover); color: var(--fg); border-color: var(--line-strong); }
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-primary:hover { background: oklch(0.80 0.14 205); border-color: oklch(0.80 0.14 205); color: var(--accent-fg); }
+.btn-ghost { background: transparent; }
+.btn-icon { padding: 6px; }
+
+/* Pills / chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--r-pill);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  border: 1px solid var(--line);
+  letter-spacing: 0.02em;
+}
+.chip-accent { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
+.chip-ok   { background: var(--ok-soft);   color: var(--ok);   border-color: oklch(0.74 0.13 160 / 0.40); }
+.chip-warn { background: var(--warn-soft); color: var(--warn); border-color: oklch(0.80 0.13 90 / 0.40); }
+.chip-high { background: var(--high-soft); color: var(--high); border-color: oklch(0.75 0.15 60 / 0.40); }
+.chip-crit { background: var(--crit-soft); color: var(--crit); border-color: oklch(0.66 0.20 25 / 0.40); }
+
+/* Headings */
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+
+/* Page transition */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-in { animation: page-in 280ms var(--ease); }

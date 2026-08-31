@@ -1,0 +1,52 @@
+{
+  "brand": "Nusatel",
+  "tagline": "Perisikan Rangkaian",
+  "login": {
+    "title": "Log masuk",
+    "subtitle": "Papan pemuka yang anda pandu dengan berbual.",
+    "username": "Nama pengguna",
+    "password": "Kata laluan",
+    "submit": "Log masuk",
+    "signingIn": "Sedang log masuk…",
+    "failed": "Nama pengguna atau kata laluan salah.",
+    "demoAccounts": "Akaun demo",
+    "roleExec": "Eksekutif · kesemua 16 negeri, termasuk hasil",
+    "roleNorth": "Serantau · Perlis, Kedah, Pulau Pinang, Perak",
+    "roleBorneo": "Serantau · Sabah, Sarawak, Labuan",
+    "note": "Pengurus serantau melihat lebih sedikit negeri dan tiada metrik kewangan — dikuatkuasakan di pelayan, bukan di antara muka."
+  },
+  "board": {
+    "assistant": "Pembantu Rangkaian",
+    "placeholder": "Tanya tentang liputan, kelajuan, peralihan atau penggera…",
+    "placeholderSelected": "Tanya tentang apa yang anda pilih…",
+    "footer": "Enter untuk hantar · Shift+Enter untuk baris baharu · Ctrl+klik untuk pilih beberapa",
+    "emptyTitle": "Tiada apa-apa pada papan",
+    "emptyBody": "Pembantu ini tidak boleh menulis SQL dan tidak boleh menulis kod antara muka. Ia menamakan metrik daripada katalog yang ditadbir dan mengeluarkan arahan bertaip — setiap panel di sini dibina daripada salah satunya. Tanya soalan untuk bermula.",
+    "bootingTitle": "Sedang membina papan…",
+    "bootingBody": "Pertanyaan permulaan melalui laluan terkawal yang sama seperti pembantu.",
+    "errorTitle": "Papan tidak dapat memuatkan katalognya",
+    "logout": "Log keluar"
+  },
+  "sections": {
+    "headline": "Utama",
+    "headlineSub": "Kedudukan rangkaian berbanding sasaran",
+    "network": "Rangkaian",
+    "commercial": "Pelanggan dan hasil"
+  },
+  "panels": {
+    "availability": "Kebolehsediaan tapak",
+    "download": "Purata kelajuan muat turun",
+    "churn": "Kadar peralihan",
+    "openAlarms": "Penggera terbuka",
+    "trafficTrend": "Trafik data mengikut bulan",
+    "trafficNote": "Dua belas bulan volum yang dibawa merentas seluruh rangkaian.",
+    "stateSpeed": "Kelajuan muat turun mengikut negeri",
+    "stateSpeedNote": "Enam belas negeri, paling perlahan dahulu, berbanding sasaran 4G 35 Mbps.",
+    "coverageMap": "Bahagian tapak 5G mengikut negeri",
+    "coverageMapNote": "Pelaksanaan setakat ini. Lembah Klang dan Pulau Pinang mendahului; pantai timur ketinggalan.",
+    "siteMap": "Tapak mengikut kelajuan muat turun",
+    "siteMapNote": "Setiap tapak dalam rangkaian, disaiz dan diwarnakan mengikut kelajuan yang diukur.",
+    "ticketMix": "Tiket pelanggan",
+    "revenueMix": "Hasil mengikut barisan perkhidmatan"
+  }
+}

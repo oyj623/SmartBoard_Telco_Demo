@@ -1,0 +1,888 @@
+﻿/* ---------------------------------------------------------------------------
+   AI Board styling.
+
+   Split from the renderers on purpose. The viz adapters produce structure â€”
+   a .kpi-row, a .data-table, a Leaflet canvas â€” and this file decides what any
+   of that looks like. The assistant contributes neither: it names a viz kind
+   and an encoding, and every pixel below is ours.
+
+   Everything reads design tokens, so the AI-built panels and the hand-built
+   pages stay visually identical across the light/dark switch.
+--------------------------------------------------------------------------- */
+
+.board-shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* -- board toolbar -------------------------------------------------------- */
+
+.board-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  min-height: 42px;
+}
+
+.board-tools .spacer { flex: 1; }
+
+.filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+}
+
+.filter-tag button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.7;
+}
+.filter-tag button:hover { opacity: 1; }
+
+/* -- the grid ------------------------------------------------------------- */
+
+.board {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* A band is one section: an optional heading plus its own twelve-column grid.
+   Sections are what let the assistant produce a dashboard with a shape rather
+   than a stack of charts in arrival order. */
+.board-band {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  /* max-content, not auto. With `auto` rows the browser distributes the
+     container's height across them, so every panel ends up the same height and
+     the tall ones (maps, tables) get clipped by the panel's own overflow.
+     max-content sizes each row to its panel and lets the board scroll. */
+  grid-auto-rows: max-content;
+  gap: 12px;
+  align-content: start;
+}
+
+.board-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 2px 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.board-section-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.board-section-head p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.board-panel {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Column spans are set inline from `panel.layout.colSpan`, because they are
+   data the assistant chose rather than a fixed set of classes. Row span is a
+   multiplier on the body height. */
+.board-panel[data-row-span='2'] .board-panel-body { height: 420px; }
+.board-panel[data-row-span='3'] .board-panel-body { height: 600px; }
+
+@media (max-width: 1100px) {
+  /* Below this width a twelve-column grid stops meaning anything. */
+  .board-panel { grid-column: span 12 !important; }
+}
+
+/* One command crossing from the chat to the board. Brief, and only on change â€”
+   a board that flashes constantly stops meaning anything. */
+@keyframes panel-land {
+  0%   { box-shadow: 0 0 0 0 var(--accent-soft); border-color: var(--accent); }
+  100% { box-shadow: 0 0 0 10px transparent;     border-color: var(--line); }
+}
+.board-panel.is-landing { animation: panel-land 900ms var(--ease); }
+
+/* Selection. A whole panel selected gets a ring; a panel with marks selected
+   inside it gets a quieter edge, because the emphasis is already visible on the
+   marks themselves and two loud signals for one idea is one too many. */
+.board-panel.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 18px var(--accent-soft);
+}
+.board-panel.has-selection { border-color: var(--accent-line); }
+
+.board-panel-head { cursor: pointer; user-select: none; }
+.board-panel-head:hover .board-panel-title { color: var(--accent); }
+
+.board-panel-subtitle {
+  font-size: 10px;
+  color: var(--fg-3);
+  margin-top: 2px;
+}
+
+.board-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.board-panel-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.board-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.35;
+}
+
+.board-panel-close {
+  background: none;
+  border: none;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.board-panel-close:hover { color: var(--crit); }
+
+/* An explicit height, and `flex: none` so it is honoured.
+   ECharts and Leaflet both measure their container once on mount, so a body
+   that resolves to a few pixels initialises into a collapsed box and never
+   recovers. Inside a column flex panel the default `flex-shrink: 1` lets the
+   body compress below its stated height, which then feeds back into the grid
+   row sizing and collapses every panel on the board. `flex: none` pins the
+   height, the panel grows around it, and the board scrolls. */
+.board-panel-body {
+  flex: none;
+  min-height: 0;
+  padding: 6px;
+  height: 260px;
+}
+
+.board-panel[data-viz='stat']       .board-panel-body { height: 118px; padding: 0; }
+.board-panel[data-viz='kpi']        .board-panel-body { height: 104px; padding: 0; }
+.board-panel[data-viz='table']      .board-panel-body { height: 300px; padding: 0; overflow: hidden; }
+.board-panel[data-viz='map_points'] .board-panel-body,
+.board-panel[data-viz='map_blocks'] .board-panel-body { height: 400px; padding: 0; }
+
+.board-panel-note {
+  padding: 7px 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+
+.panel-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-3);
+  line-height: 1.6;
+}
+
+.board-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--fg-3);
+}
+.board-empty h2 { font-size: 15px; color: var(--fg-2); margin: 0 0 8px; font-weight: 600; }
+.board-empty p  { font-size: 12px; line-height: 1.7; max-width: 460px; margin: 0 auto; }
+
+/* -- narration ------------------------------------------------------------ */
+
+.board-narration {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--r-3);
+  font-size: 12px;
+  line-height: 1.55;
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  color: var(--fg-2);
+}
+.board-narration[data-tone='positive'] { border-color: var(--ok);   background: var(--ok-soft); }
+.board-narration[data-tone='warning']  { border-color: var(--warn); background: var(--warn-soft); }
+.board-narration[data-tone='critical'] { border-color: var(--crit); background: var(--crit-soft); }
+
+/* -- stat: one number, the tile a dashboard opens with -------------------- */
+
+.stat {
+  height: 100%;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.stat:hover { background: var(--hover); }
+.stat.is-selected { border-left-color: var(--accent); background: var(--accent-soft); }
+
+.stat-label {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--fg);
+}
+.stat-unit { font-size: 10px; color: var(--fg-4); }
+.stat-delta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.stat-delta-vs { color: var(--fg-4); font-weight: 400; }
+
+/* -- KPI (drawn by the echarts adapter) ----------------------------------- */
+
+.kpi-row {
+  display: flex;
+  height: 100%;
+  align-items: center;
+}
+
+.kpi {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border-right: 1px solid var(--line-soft);
+  border-top: 2px solid transparent;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.kpi:last-child { border-right: none; }
+.kpi:hover { background: var(--hover); }
+.kpi.is-selected { border-top-color: var(--accent); background: var(--accent-soft); }
+
+.kpi-label {
+  font-size: 10px;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.kpi-unit { font-size: 10px; color: var(--fg-4); }
+
+/* -- table ---------------------------------------------------------------- */
+
+.table-wrap { height: 100%; overflow: auto; }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-2);
+  text-align: left;
+  padding: 7px 10px;
+  font-weight: 600;
+  color: var(--fg-3);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--fg-2);
+}
+
+.data-table td.metric,
+.data-table th.metric {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--fg);
+}
+
+.data-table tbody tr { cursor: pointer; }
+.data-table tbody tr:hover td { background: var(--hover); }
+.data-table tr.is-lit td { background: var(--high-soft); color: var(--fg); }
+.data-table tr.is-selected td { background: var(--accent-soft); color: var(--fg); }
+
+.table-more {
+  padding: 6px 10px;
+  font-size: 10px;
+  color: var(--fg-4);
+  text-align: center;
+}
+
+/* -- map ------------------------------------------------------------------ */
+
+.leaflet-container { background: var(--bg-2); font-family: var(--font-sans); }
+
+.map-tip {
+  background: var(--bg-2) !important;
+  color: var(--fg) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-2) !important;
+  font-size: 11px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+.map-tip::before { border-top-color: var(--line) !important; }
+
+.map-legend {
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  padding: 6px 8px;
+  backdrop-filter: blur(6px);
+}
+.map-legend-bar { display: flex; height: 7px; width: 108px; border-radius: 2px; overflow: hidden; }
+.map-legend-bar i { flex: 1; }
+.map-legend-ends {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-3);
+  margin-top: 3px;
+}
+
+/* -- chat side ------------------------------------------------------------ */
+
+.board-chat {
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.board-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.board-chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.msg {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 11px;
+  border-radius: var(--r-3);
+  max-width: 92%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.msg--user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.msg--brain {
+  align-self: flex-start;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+}
+
+.msg--system {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--fg-3);
+  background: transparent;
+  padding: 2px 0;
+}
+
+.msg--error {
+  align-self: flex-start;
+  background: var(--crit-soft);
+  border: 1px solid var(--crit);
+  color: var(--fg);
+  font-size: 11px;
+}
+
+/* What ran, in one line. The compiled SQL is not here on purpose â€” it lives in
+   the server's audit log, where an auditor can find it, rather than in the
+   transcript, where it only stood between the person and their answer. */
+.trace-line {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  padding: 1px 0 1px 10px;
+  border-left: 2px solid var(--line);
+}
+
+.cmd-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--ok-soft);
+  border: 1px solid var(--ok);
+  color: var(--fg-2);
+}
+
+.thinking { display: inline-flex; gap: 3px; align-items: center; }
+.thinking i {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--fg-3);
+  animation: blink 1.1s infinite;
+}
+.thinking i:nth-child(2) { animation-delay: 0.18s; }
+.thinking i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes blink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+
+.clarify {
+  align-self: stretch;
+  border: 1px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--r-3);
+  padding: 9px 11px;
+  font-size: 12px;
+  color: var(--fg);
+}
+.clarify-options { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.clarify-options button {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-1);
+  color: var(--fg);
+  cursor: pointer;
+}
+.clarify-options button:hover { background: var(--hover); }
+
+.board-suggestions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 12px 8px;
+  flex-shrink: 0;
+}
+
+.board-suggestions button {
+  text-align: left;
+  font-size: 10px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  cursor: pointer;
+}
+.board-suggestions button:hover { background: var(--hover); color: var(--fg); }
+
+.board-composer {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+/* The quote bar: what you picked, sitting above what you are about to type.
+   Same affordance as replying to a message in a chat app, and for the same
+   reason â€” it makes a short question about a specific thing unambiguous. */
+.composer-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--accent-line);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-2);
+}
+.composer-quote-marks {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.composer-quote-clear {
+  background: none;
+  border: none;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.composer-quote-clear:hover { color: var(--crit); }
+
+.quoted-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+}
+.quoted-chip button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.7;
+}
+.quoted-chip button:hover { opacity: 1; }
+
+/* A sent message keeps its quote above it, so the transcript still shows what
+   the question was about. */
+.msg-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.quoted-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 92%;
+}
+
+.board-composer-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  padding: 6px 8px;
+}
+
+.board-composer textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg);
+  max-height: 110px;
+}
+
+/* ---------------------------------------------------------------------------
+   Demo rail â€” the presenter's script, as buttons
+   --------------------------------------------------------------------------- */
+
+.demo-rail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+  background: var(--bg-0);
+}
+
+.demo-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.demo-tabs { display: flex; gap: 2px; flex: 1; }
+.demo-tabs button {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.demo-tabs button.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.demo-reset, .demo-close {
+  background: none;
+  border: none;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 4px;
+}
+.demo-close { font-size: 15px; line-height: 1; }
+.demo-reset:hover, .demo-close:hover { color: var(--fg); }
+
+.demo-rail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px 12px;
+}
+
+.demo-act { margin-bottom: 14px; }
+.demo-act > header {
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 7px;
+}
+.demo-act h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.01em;
+}
+.demo-act > header span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* A step the presenter clicks. The prompt text is shown in full so they can
+   read ahead â€” a button whose label hides what it will do is a trap on stage. */
+.demo-step { margin-bottom: 9px; }
+
+.demo-step-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--fg);
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+.demo-step-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--hover); }
+.demo-step-btn:disabled { opacity: 0.45; cursor: default; }
+
+.demo-step-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--fg-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.demo-step-text {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--fg);
+}
+
+.demo-step.is-done .demo-step-btn { border-color: var(--ok); background: var(--ok-soft); }
+.demo-step.is-done .demo-step-label::after { content: ' âœ“'; color: var(--ok); }
+
+.demo-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  letter-spacing: 0.06em;
+}
+.demo-badge.is-off {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--fg-4);
+}
+
+/* The line to say. In the rail rather than in a separate document, because a
+   script in another window is a script nobody reads. */
+.demo-say {
+  margin: 4px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--line);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--fg-3);
+  font-style: italic;
+}
+
+/* A cue is a physical gesture â€” click a bar, flip the toggle. No button, because
+   the gesture is the point. */
+.demo-cue {
+  margin-bottom: 9px;
+  padding: 6px 9px;
+  border-radius: var(--r-2);
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+}
+.demo-cue-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--warn);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.demo-cue p {
+  margin: 3px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--fg-3);
+  font-style: italic;
+}
+
+.demo-faq { border-bottom: 1px solid var(--line-soft); }
+.demo-faq-q {
+  width: 100%;
+  text-align: left;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  color: var(--fg-2);
+  font-size: 11.5px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.demo-faq-q::before { content: 'â–¸ '; color: var(--accent); }
+.demo-faq.is-open .demo-faq-q { color: var(--fg); font-weight: 600; }
+.demo-faq.is-open .demo-faq-q::before { content: 'â–¾ '; }
+.demo-faq-body { padding: 0 4px 10px; }
+.demo-faq-body .demo-step-btn { margin-top: 7px; }
+
+.demo-note {
+  margin: 5px 0 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--warn);
+}
+.demo-expect {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--fg-4);
+}
+
+/* An act the deterministic fallback cannot drive. Composition is exactly the
+   thing a rules engine cannot fake, which is why it is worth calling out
+   rather than letting it fail quietly on stage. */
+.demo-needs-model {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-style: normal;
+  color: var(--warn);
+}

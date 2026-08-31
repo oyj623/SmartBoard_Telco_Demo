@@ -1,0 +1,39 @@
+# Database (built by `python start.py` on first run)
+nusatel.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log
+frontend/dist/
+backend/static/
+
+# Environment & secrets
+.env
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Test & cache
+.pytest_cache/
+.cache/
+
+# Logs
+logs/
+*.log
+
+# Internal planning docs
+docs/superpowers/
+.superpowers/
+.claude/settings.local.json

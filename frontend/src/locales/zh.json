@@ -1,0 +1,52 @@
+{
+  "brand": "Nusatel",
+  "tagline": "网络智能中枢",
+  "login": {
+    "title": "登录",
+    "subtitle": "用对话驱动的仪表板。",
+    "username": "用户名",
+    "password": "密码",
+    "submit": "登录",
+    "signingIn": "登录中…",
+    "failed": "用户名或密码错误。",
+    "demoAccounts": "演示账号",
+    "roleExec": "高管 · 全部 16 个州属，含财务数据",
+    "roleNorth": "区域经理 · 玻璃市、吉打、槟城、霹雳",
+    "roleBorneo": "区域经理 · 沙巴、砂拉越、纳闽",
+    "note": "区域经理可见的州属较少，且看不到财务指标 —— 由服务端强制执行，而非界面隐藏。"
+  },
+  "board": {
+    "assistant": "网络助手",
+    "placeholder": "询问覆盖、速率、流失或告警…",
+    "placeholderSelected": "针对所选内容提问…",
+    "footer": "回车发送 · Shift+回车换行 · Ctrl+点击可多选",
+    "emptyTitle": "面板为空",
+    "emptyBody": "助手不能编写 SQL，也不能编写界面代码。它只能从受治理的指标目录中调用指标，并发出类型化指令 —— 这里的每个面板都由此生成。提个问题开始吧。",
+    "bootingTitle": "正在构建面板…",
+    "bootingBody": "初始查询与助手走的是同一条受控路径。",
+    "errorTitle": "无法加载指标目录",
+    "logout": "退出"
+  },
+  "sections": {
+    "headline": "关键指标",
+    "headlineSub": "网络当前表现与目标对比",
+    "network": "网络",
+    "commercial": "用户与收入"
+  },
+  "panels": {
+    "availability": "基站可用率",
+    "download": "平均下载速度",
+    "churn": "用户流失率",
+    "openAlarms": "未处理告警",
+    "trafficTrend": "月度数据流量",
+    "trafficNote": "全网十二个月的承载流量。",
+    "stateSpeed": "各州下载速度",
+    "stateSpeedNote": "十六个州属，由慢至快，对比 35 Mbps 的 4G 目标。",
+    "coverageMap": "各州 5G 基站占比",
+    "coverageMapNote": "当前建设进度。巴生谷与槟城领先，东海岸滞后。",
+    "siteMap": "基站下载速度分布",
+    "siteMapNote": "全网基站，按实测速率着色与调整大小。",
+    "ticketMix": "客服工单",
+    "revenueMix": "各业务线收入"
+  }
+}

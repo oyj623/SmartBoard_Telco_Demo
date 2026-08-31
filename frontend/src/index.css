@@ -1,0 +1,9 @@
+@import './tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet draws its panes above everything by default, which puts a map panel's
+   tiles over the chat column. */
+.leaflet-pane { z-index: 400; }
+.leaflet-top, .leaflet-bottom { z-index: 500; }
