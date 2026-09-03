@@ -93,7 +93,12 @@ def create_board_router(
     _views: Dict[str, tuple] = {}
 
     def _scope_view(ctx: SecurityContext):
-        key = ctx.scope_key()
+        # The catalog fingerprint joins the key because tool schemas and the
+        # system prompt are *derived* from the catalog. Without it, a catalog
+        # reload would keep handing the model the enum it cached before the
+        # reload — which fails in the most confusing way available, by refusing
+        # a metric the catalog now contains.
+        key = f"{ctx.scope_key()}::{getattr(manifest, 'catalog_fingerprint', '')}"
         if key not in _views:
             if visible_metrics is None:
                 view = manifest

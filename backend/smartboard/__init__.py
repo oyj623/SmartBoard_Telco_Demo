@@ -21,21 +21,27 @@ Vendor this package into your backend, write a manifest, and mount the router:
 See docs/ARCHITECTURE.md for the full story.
 """
 
+from .catalog import Catalog
 from .commands import COMMAND_TYPES, DashboardCommand
+from .config import AppConfig
 from .engine import CommandOutcome, Engine
 from .ir import Filter, Query, ResultHandle, Sort, TimeRange
-from .manifest import Dataset, Dimension, Manifest, ManifestError, Metric, load_manifest
+from .manifest import Dataset, Dimension, Manifest, ManifestError, Metric, load_board, load_manifest
 from .security import QueryGuard, SecurityContext, no_tenancy
 from .session import TurnContext, run_turn
 from .store import ResultStore, StoredResult
 from .tools import build_tools, to_anthropic_format, to_openai_format
 from .brain.base import AssistantTurn, BrainClient, ToolCall, build_system_prompt
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
+    "AppConfig",
     "AssistantTurn",
     "BrainClient",
+    "build_system_prompt",
+    "build_tools",
+    "Catalog",
     "COMMAND_TYPES",
     "CommandOutcome",
     "DashboardCommand",
@@ -43,24 +49,23 @@ __all__ = [
     "Dimension",
     "Engine",
     "Filter",
+    "load_board",
+    "load_manifest",
     "Manifest",
     "ManifestError",
     "Metric",
+    "no_tenancy",
     "Query",
     "QueryGuard",
     "ResultHandle",
     "ResultStore",
+    "run_turn",
     "SecurityContext",
     "Sort",
     "StoredResult",
     "TimeRange",
-    "ToolCall",
-    "TurnContext",
-    "build_system_prompt",
-    "build_tools",
-    "load_manifest",
-    "no_tenancy",
-    "run_turn",
     "to_anthropic_format",
     "to_openai_format",
+    "ToolCall",
+    "TurnContext",
 ]

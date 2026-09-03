@@ -1,80 +1,69 @@
 """
-Manifest — the one file that makes SmartBoard project-specific.
+Manifest — configuration and catalog, assembled.
 
-Everything the brain is allowed to do is declared here: which datasets exist,
-which metrics and dimensions can be named, which viz kinds may be rendered,
-which commands may be issued. Swap this file and the same engine drives a
-different product.
+Two things used to live in one file. They now have separate homes:
 
-Rule that keeps the whole design honest: SQL fragments (`expr`, `column`,
-`from`, `joins`) come only from this file, which is authored by you and shipped
-with your code. They are trusted. Everything arriving from the brain or the
-browser is an *identifier* that must resolve against this catalog, or a *value*
-that becomes a bound parameter. Nothing in between.
+    smartboard/config.py     deployment configuration — yours, in your repo
+    smartboard/catalog/      the data model — a file, introspection, or a service
+
+`Manifest` is what the engine actually runs against: the two halves joined. It
+keeps the exact shape it always had, deliberately, so that the compiler, the
+guard, the tool generator and the session loop did not have to change at all.
+That none of them needed touching is the measure of whether the seam was real.
+
+Two entry points:
+
+    load_manifest(path)   one file with everything — how both shipped demos work,
+                          and how a small deployment should keep working forever
+    load_board(path)      board.yaml plus catalog sources, with the SQL locked
+
+The rule that keeps the whole design honest, unchanged from before: SQL fragments
+(`expr`, `column`, `from`, `joins`) are trusted because you authored them.
+`load_board` extends that to catalogs you did not author, by requiring their SQL
+to match a digest you committed. See `smartboard/catalog/lock.py`.
 """
 
 from __future__ import annotations
 
-import os
-import re
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
 
-SAFE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+from .catalog import Catalog, Dataset, Dimension, Metric, ManifestError, build_catalog, verify
+from .catalog import sources_from_config
+from .catalog.base import SAFE_ID, labels as _labels  # noqa: F401  (re-exported for compatibility)
+from .catalog.file import catalog_from_dict
+from .config import AppConfig, config_from_dict
 
+log = logging.getLogger("smartboard.manifest")
 
-class ManifestError(ValueError):
-    pass
-
-
-@dataclass
-class Dataset:
-    id: str
-    from_: str
-    joins: List[str] = field(default_factory=list)
-    description: str = ""
-
-    def sql_from(self) -> str:
-        return " ".join([f"FROM {self.from_}", *self.joins])
-
-
-@dataclass
-class Metric:
-    id: str
-    dataset: str
-    expr: str
-    label: Dict[str, str]
-    unit: str = ""
-    format: str = "number"       # number | currency | percent | duration | bytes
-    grain: List[str] = field(default_factory=list)
-    direction: str = "neutral"   # up_good | down_good | neutral — drives colour of deltas
-    description: str = ""
-
-
-@dataclass
-class Dimension:
-    id: str
-    type: str                    # string | time | number | geo
-    label: Dict[str, str]
-    columns: Dict[str, str] = field(default_factory=dict)   # dataset id -> SQL expression
-    values: Optional[List[str]] = None                      # small enums, given to the brain verbatim
-    description: str = ""
-    geo: Dict[str, str] = field(default_factory=dict)       # {"lat": "...", "lng": "..."}
-    native_grain: Optional[str] = None                      # grain the column is already stored at
-
-    def column_for(self, dataset: str) -> Optional[str]:
-        return self.columns.get(dataset) or self.columns.get("*")
-
-    @property
-    def is_geo(self) -> bool:
-        return self.type == "geo" and bool(self.geo)
+__all__ = [
+    "Dataset",
+    "Dimension",
+    "Manifest",
+    "ManifestError",
+    "Metric",
+    "SAFE_ID",
+    "load_board",
+    "load_manifest",
+]
 
 
 @dataclass
 class Manifest:
+    """
+    The assembled view the engine runs against.
+
+    Still a flat dataclass with the same fields it always had, because
+    `dataclasses.replace(manifest, metrics=...)` is how the API binding trims the
+    catalog per role — and because a compatibility break here would reach every
+    deployment for no benefit. The split happens at load time, which is where it
+    matters, not in the object model.
+    """
+
     name: str
     title: Dict[str, str]
     source: Dict[str, Any]
@@ -90,7 +79,14 @@ class Manifest:
     locales: List[str] = field(default_factory=lambda: ["en"])
     glossary: Dict[str, str] = field(default_factory=dict)
     suggestions: List[str] = field(default_factory=list)
-    currency: str = ""   # prefix for `format: currency` metrics, e.g. "RM" or "$"
+    currency: str = ""
+
+    # Where this came from, for cache keys and audit. `catalog_fingerprint`
+    # changes whenever any catalog field does — including a label — which is what
+    # lets the API binding notice that the tool schemas it cached are stale.
+    catalog_fingerprint: str = ""
+    capabilities: Dict[str, Any] = field(default_factory=dict)
+    data_plane: Dict[str, Any] = field(default_factory=dict)
 
     # ---- lookups -------------------------------------------------------
 
@@ -110,7 +106,7 @@ class Manifest:
 
         SmartBoard deliberately refuses to invent cross-dataset joins. If a question
         spans two fact tables, that is a modelling decision you make in the
-        manifest by declaring a third dataset — not something an LLM improvises.
+        catalog by declaring a third dataset — not something an LLM improvises.
         """
         wanted = {self.metric(m).dataset for m in metric_ids}
         if len(wanted) > 1:
@@ -158,97 +154,106 @@ class Manifest:
         }
 
 
-def _labels(raw: Any, fallback: str) -> Dict[str, str]:
-    if raw is None:
-        return {"en": fallback}
-    if isinstance(raw, str):
-        return {"en": raw}
-    return dict(raw)
+# ---------------------------------------------------------------------------
+# Assembly
+# ---------------------------------------------------------------------------
 
-
-def _all_command_types() -> List[str]:
-    """Imported lazily and relatively: `commands` imports `ir`, not `manifest`,
-    so there is no cycle, but a module-level import here would still be one."""
-    from .commands import COMMAND_TYPES
-
-    return list(COMMAND_TYPES)
+def _assemble(config: AppConfig, catalog: Catalog) -> Manifest:
+    return Manifest(
+        name=config.name,
+        title=config.title,
+        source=config.source,
+        datasets=catalog.datasets,
+        metrics=catalog.metrics,
+        dimensions=catalog.dimensions,
+        viz_enabled=config.viz_enabled,
+        commands_enabled=config.commands_enabled,
+        default_time_dim=config.default_time_dim,
+        max_rows=config.max_rows,
+        statement_timeout_ms=config.statement_timeout_ms,
+        tenancy_hook=config.tenancy_hook,
+        locales=config.locales,
+        glossary=catalog.glossary,
+        suggestions=config.suggestions,
+        currency=config.currency,
+        catalog_fingerprint=catalog.fingerprint(),
+        capabilities=config.capabilities,
+        data_plane=config.data_plane,
+    )
 
 
 def load_manifest(path: str | Path) -> Manifest:
+    """
+    Load a single-file manifest — configuration and catalog together.
+
+    This is how both shipped demos work and it stays supported without
+    qualification. A deployment with one team and one YAML has nothing to gain
+    from splitting it, and the catalog is trusted because it is in the repo.
+
+    If the file carries a `catalog.sources` block, it is treated as a board.yaml
+    and `load_board` takes over, so a deployment can migrate by adding a block
+    rather than by changing its call site.
+    """
     path = Path(path)
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+    if (raw.get("catalog") or {}).get("sources"):
+        return load_board(path)
 
     for key in ("name", "datasets", "metrics", "dimensions"):
         if key not in raw:
             raise ManifestError(f"manifest is missing required key '{key}'")
 
-    datasets: Dict[str, Dataset] = {}
-    for did, d in raw["datasets"].items():
-        if not SAFE_ID.match(did):
-            raise ManifestError(f"dataset id '{did}' must be snake_case")
-        datasets[did] = Dataset(
-            id=did, from_=d["from"], joins=list(d.get("joins", [])), description=d.get("description", "")
+    config = config_from_dict(raw)
+    catalog = catalog_from_dict(raw, source=f"file:{path.name}", trusted=True)
+    catalog.validate()
+    return _assemble(config, catalog)
+
+
+def load_board(
+    path: str | Path,
+    *,
+    introspector: Any = None,
+    adapter: Any = None,
+) -> Manifest:
+    """
+    Load a board.yaml whose catalog comes from configured sources.
+
+    `introspector` and `adapter` are supplied by the deployment rather than built
+    from config, because both need live connections and credentials that belong
+    to the application, not to a YAML file. Configuration selects and
+    parameterises; it does not dial out on its own.
+
+    The lock is verified before the manifest is returned. A catalog drawing on
+    anything outside your repository must match the digests you committed, or
+    this raises — because the alternative is executing SQL nobody reviewed.
+    """
+    path = Path(path)
+    base_dir = path.parent
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+    config = config_from_dict(raw)
+    if not config.catalog_sources:
+        raise ManifestError(
+            f"{path.name} has no catalog.sources. Use load_manifest() for a single-file manifest."
         )
 
-    metrics: Dict[str, Metric] = {}
-    for mid, m in raw["metrics"].items():
-        if not SAFE_ID.match(mid):
-            raise ManifestError(f"metric id '{mid}' must be snake_case")
-        if m["dataset"] not in datasets:
-            raise ManifestError(f"metric '{mid}' references unknown dataset '{m['dataset']}'")
-        metrics[mid] = Metric(
-            id=mid,
-            dataset=m["dataset"],
-            expr=m["expr"],
-            label=_labels(m.get("label"), mid),
-            unit=m.get("unit", ""),
-            format=m.get("format", "number"),
-            grain=list(m.get("grain", [])),
-            direction=m.get("direction", "neutral"),
-            description=m.get("description", ""),
-        )
-
-    dimensions: Dict[str, Dimension] = {}
-    for did, d in raw["dimensions"].items():
-        if not SAFE_ID.match(did):
-            raise ManifestError(f"dimension id '{did}' must be snake_case")
-        cols = d.get("columns")
-        if cols is None and "column" in d:
-            cols = {"*": d["column"]}
-        if not cols:
-            raise ManifestError(f"dimension '{did}' needs 'column' or 'columns'")
-        dimensions[did] = Dimension(
-            id=did,
-            type=d.get("type", "string"),
-            label=_labels(d.get("label"), did),
-            columns=dict(cols),
-            values=d.get("values"),
-            description=d.get("description", ""),
-            geo=dict(d.get("geo", {})),
-            native_grain=d.get("native_grain"),
-        )
-
-    limits = raw.get("limits", {})
-    source = dict(raw.get("source", {}))
-    if "dsn_env" in source:
-        source.setdefault("dsn", os.environ.get(source["dsn_env"], ""))
-
-    mf = Manifest(
-        name=raw["name"],
-        title=_labels(raw.get("title"), raw["name"]),
-        source=source,
-        datasets=datasets,
-        metrics=metrics,
-        dimensions=dimensions,
-        viz_enabled=list(raw.get("viz", {}).get("enabled", ["kpi", "line", "bar", "table"])),
-        commands_enabled=list(raw.get("commands", {}).get("enabled", _all_command_types())),
-        default_time_dim=raw.get("default_time_dim"),
-        max_rows=int(limits.get("max_rows", 5000)),
-        statement_timeout_ms=int(limits.get("statement_timeout_ms", 5000)),
-        tenancy_hook=(raw.get("tenancy") or {}).get("hook"),
-        locales=list(raw.get("locales", ["en"])),
-        glossary=dict(raw.get("glossary", {})),
-        suggestions=list(raw.get("suggestions", [])),
-        currency=str(raw.get("currency", "")),
+    sources = sources_from_config(
+        config.catalog_sources, base_dir, adapter=adapter, introspector=introspector
     )
-    return mf
+    catalog = build_catalog(sources)
+
+    lock_path = config.catalog_lock
+    if lock_path and not Path(lock_path).is_absolute():
+        lock_path = str((base_dir / lock_path).resolve())
+
+    diff = verify(catalog, lock_path, strict=config.strict_lock)
+    if not diff.clean:
+        log.warning("smartboard.catalog.unlocked %s", diff.describe())
+
+    log.info(
+        "smartboard.catalog.loaded sources=%d metrics=%d dimensions=%d trusted=%s fp=%s",
+        len(sources), len(catalog.metrics), len(catalog.dimensions),
+        catalog.trusted, catalog.fingerprint(),
+    )
+    return _assemble(config, catalog)
