@@ -97,6 +97,10 @@ export function useBoard({
             action: 'add_panel',
             panel_id: panel.panel_id,
             result_id: result.result_id,
+            // Recorded so the starting board is as exportable as one the
+            // assistant built. Both go through the same reducer; neither is a
+            // special case.
+            ir: panel.ir,
             viz: panel.viz,
             encoding: panel.encoding,
             title: panel.title,

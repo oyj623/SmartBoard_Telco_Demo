@@ -44,6 +44,10 @@ export class SmartBoardClient {
     this.manifest = null;
     this.health = null;
     this._results = new Map();
+    // result_id -> the IR that produced it. A result_id is a cache key with a
+    // TTL; the question behind it is the durable thing, and it is what a saved
+    // board replays. See boardFile.js.
+    this._irs = new Map();
     this._history = [];
   }
 
@@ -87,6 +91,11 @@ export class SmartBoardClient {
     return data;
   }
 
+  /** The query behind a result, if this client saw it go past. */
+  irFor(resultId) {
+    return this._irs.get(resultId) || null;
+  }
+
   /** Run IR directly, with no model in the loop. Same guarded path. */
   async query(ir) {
     const res = await fetch(`${this.baseUrl}/query`, {
@@ -97,6 +106,7 @@ export class SmartBoardClient {
     if (!res.ok) throw new Error((await res.json()).detail || 'query failed');
     const data = await res.json();
     this._results.set(data.result_id, data);
+    this._irs.set(data.result_id, ir);
     return data;
   }
 
@@ -147,8 +157,17 @@ export class SmartBoardClient {
           continue;
         }
 
+        if (event.type === 'result' && event.query) {
+          this._irs.set(event.result_id, event.query);
+        }
         if (event.type === 'command') {
-          const outcome = this.store.apply(event.command);
+          // Carry the IR onto the command so the panel records how it was
+          // built. The model never has to supply this and cannot forge it —
+          // it is looked up from a query the server already ran.
+          const command = event.command.result_id
+            ? { ...event.command, ir: this._irs.get(event.command.result_id) || undefined }
+            : event.command;
+          const outcome = this.store.apply(command);
           if (!outcome.ok) event.clientError = outcome.error;
         }
         if (event.type === 'done' && Array.isArray(event.messages)) {
@@ -162,6 +181,7 @@ export class SmartBoardClient {
   clearHistory() {
     this._history = [];
     this._results.clear();
+    this._irs.clear();
   }
 }
 

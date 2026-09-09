@@ -132,8 +132,6 @@
 /* Column spans are set inline from `panel.layout.colSpan`, because they are
    data the assistant chose rather than a fixed set of classes. Row span is a
    multiplier on the body height. */
-.board-panel[data-row-span='2'] .board-panel-body { height: 420px; }
-.board-panel[data-row-span='3'] .board-panel-body { height: 600px; }
 
 @media (max-width: 1100px) {
   /* Below this width a twelve-column grid stops meaning anything. */
@@ -222,6 +220,13 @@
 .board-panel[data-viz='table']      .board-panel-body { height: 300px; padding: 0; overflow: hidden; }
 .board-panel[data-viz='map_points'] .board-panel-body,
 .board-panel[data-viz='map_blocks'] .board-panel-body { height: 400px; padding: 0; }
+
+/* Row span last, and specific enough to beat the per-viz heights above. These
+   used to sit before them, which meant a map declaring row_span 2 silently kept
+   its one-row height — and resizing by drag would have looked broken for
+   exactly the panels most worth making taller. */
+.board-panel[data-row-span='2'][data-viz] .board-panel-body { height: 420px; }
+.board-panel[data-row-span='3'][data-viz] .board-panel-body { height: 600px; }
 
 .board-panel-note {
   padding: 7px 12px;
@@ -885,4 +890,186 @@
   font-size: 9px;
   font-style: normal;
   color: var(--warn);
+}
+
+
+/* -- direct manipulation: drag to reorder, drag to resize ------------------
+   Every affordance here is hover-revealed. A board is read far more often than
+   it is rearranged, and a permanent scatter of grips and handles taxes every
+   reading to make the occasional edit slightly faster. They appear on approach
+   and are always reachable from the keyboard. */
+
+.board-panel-grip {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin: -2px 2px 0 -4px;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: var(--r-1, 3px);
+  background: transparent;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 120ms var(--ease), color 120ms var(--ease);
+  touch-action: none;   /* or the browser scrolls instead of letting us drag */
+}
+/* Held open while the gesture runs: the pointer routinely leaves the panel
+   mid-drag, and an affordance that vanishes under your own cursor is unnerving. */
+.board-panel:hover .board-panel-grip,
+.board-panel.is-dragging .board-panel-grip,
+.board-panel-grip:focus-visible { opacity: 1; }
+.board-panel-grip:hover { color: var(--fg); background: var(--bg-2); }
+.board-panel-grip:focus-visible { outline: 2px solid var(--accent); opacity: 1; }
+.board-panel-grip:active { cursor: grabbing; }
+
+/* The panel clips its contents (`overflow: hidden`, so a chart canvas cannot
+   escape the rounded corners), which means every affordance below has to live
+   INSIDE the box. Anything hung off a negative offset is simply invisible. */
+.board-panel { position: relative; }
+
+/* The panel being dragged fades rather than moving. The grid reflows on drop,
+   not during the drag, so animating the panel itself would promise a layout
+   that is not what you are going to get; the insertion bar is the promise. */
+.board-panel.is-dragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+/* The insertion bar. Drawn on the panel you are dropping next to, so it needs
+   no absolute positioning maths and cannot drift out of step with the grid. */
+.board-panel.drop-before::before,
+.board-panel.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-soft);
+  z-index: 3;
+}
+.board-panel.drop-before::before { left: 0; }
+.board-panel.drop-after::after   { right: 0; }
+
+/* Resize grips: right edge for width, bottom edge for height, corner for both.
+   Width and height mean different things on this board — width is relative
+   importance out of twelve columns, height is how much room the marks need —
+   so they get separate targets rather than one corner that does both. */
+.board-panel-resize {
+  position: absolute;
+  opacity: 0;
+  /* Not just invisible — inert. An 8px strip down the right edge of every panel
+     that still swallowed clicks would quietly break tooltips and map panning
+     near the edge, which is the kind of bug nobody attributes to a resize grip. */
+  pointer-events: none;
+  z-index: 2;
+  touch-action: none;
+  transition: opacity 120ms var(--ease), background 120ms var(--ease);
+}
+.board-panel:hover .board-panel-resize,
+.board-panel.is-resizing .board-panel-resize {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.board-panel-resize.is-col {
+  top: 12px;
+  bottom: 12px;
+  right: 0;
+  width: 8px;
+  cursor: ew-resize;
+  border-radius: 4px;
+}
+.board-panel-resize.is-row {
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 8px;
+  cursor: ns-resize;
+  border-radius: 4px;
+}
+.board-panel-resize.is-both {
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  border-radius: 0 0 var(--r-3) 0;
+  background:
+    linear-gradient(-45deg, transparent 44%, var(--line-strong) 44%, var(--line-strong) 56%, transparent 56%);
+}
+.board-panel-resize.is-col:hover,
+.board-panel-resize.is-row:hover { background: var(--accent-line); }
+
+/* The span you are dragging towards. Snapping without a readout feels like the
+   interface fighting you; with one it reads as a grid you are working with. */
+.board-panel-span {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  padding: 2px 6px;
+  border-radius: var(--r-2, 4px);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.board-panel.is-resizing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+/* Column guides, only while a gesture is live. Showing the twelve columns
+   permanently would be showing your working; showing them exactly when someone
+   is choosing a width is showing them the choice. */
+.board-grid.is-arranging {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--accent-soft) 0,
+    var(--accent-soft) 1px,
+    transparent 1px,
+    transparent calc((100% + 12px) / 12)
+  );
+  border-radius: var(--r-2, 4px);
+}
+
+.board-band.is-drop-target .board-grid {
+  outline: 2px dashed var(--accent-line);
+  outline-offset: 4px;
+  border-radius: var(--r-2, 4px);
+}
+
+.board-band-empty {
+  grid-column: span 12;
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-3);
+  color: var(--fg-3);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* While dragging, the whole document stops trying to select text and every
+   cursor agrees with the gesture. Without this, a drag across a chart paints a
+   selection highlight over the board. */
+body.is-board-dragging { cursor: grabbing; user-select: none; }
+body.is-board-dragging * { cursor: inherit !important; }
+
+@media (max-width: 1100px) {
+  /* Panels are forced to full width below this, so there is no width left to
+     drag. The handle stays: reordering still means something. */
+  .board-panel-resize { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-panel-grip,
+  .board-panel-resize { transition: none; }
 }
