@@ -1242,3 +1242,73 @@ body.is-board-dragging * { cursor: inherit !important; }
 }
 .board-panel[data-row-span='2'][data-viz='filter_panel'] .board-panel-body { max-height: 460px; height: auto; }
 .board-panel[data-row-span='3'][data-viz='filter_panel'] .board-panel-body { max-height: 620px; height: auto; }
+
+
+/* -- board files ----------------------------------------------------------- */
+
+.board-file { position: relative; display: flex; align-items: center; gap: 6px; }
+
+.board-file-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 262px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-3);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.28);
+}
+
+.board-file-menu button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  text-align: left;
+  font-size: 11px;
+  padding: 6px 7px;
+  border-radius: var(--r-1);
+  cursor: pointer;
+}
+.board-file-menu button:hover { background: var(--hover); color: var(--fg); }
+.board-file-menu button.is-quiet { color: var(--fg-3); font-size: 10px; }
+
+.board-file-when {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+
+/* Says what a saved board actually contains. The distinction between saving a
+   layout and saving a snapshot is the one thing people get wrong about a
+   feature like this, and the moment to say so is the moment they use it. */
+.board-file-note {
+  margin: 6px 7px 3px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--fg-3);
+}
+
+.board-file-msg {
+  font-size: 9px;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.board-file-msg.is-warn { color: var(--warn); }
+
+/* Drop a saved board anywhere on the board to open it. */
+.board.is-file-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  background: var(--accent-soft);
+}

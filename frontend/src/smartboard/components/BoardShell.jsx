@@ -17,11 +17,13 @@
  * `extraFlags` rides along on every chat turn as the request's `extra` dict.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import BoardChat from './BoardChat.jsx';
+import BoardFileMenu from './BoardFileMenu.jsx';
 import BoardPanel from './BoardPanel.jsx';
 import { useBoardLayout } from './useBoardLayout.js';
+import { applyBoardFile, autosaveBoard, parseBoardFile } from '../boardFile.js';
 import { t as pick } from '../client.js';
 import './board.css';
 
@@ -79,6 +81,50 @@ export default function BoardShell({
   // changing the layout are literally the same operation, and Undo, the board
   // snapshot the model sees, and export all get the mouse path for free.
   const arrange = useBoardLayout({ store, state, locale });
+
+  // Autosave, debounced. Restoring is deliberately not automatic — see the note
+  // in boardFile.js — but losing a board to a stray refresh should not be
+  // possible either. Skipped while the board is still building itself, or the
+  // half-built starting board would overwrite a good save.
+  useEffect(() => {
+    if (booting || !manifest) return undefined;
+    const id = setTimeout(() => autosaveBoard(state, { manifest, health }), 1200);
+    return () => clearTimeout(id);
+  }, [state, booting, manifest, health]);
+
+  // Dropping a board file onto the board opens it. The panel drag uses pointer
+  // events rather than HTML5 drag-and-drop, so the two gestures cannot collide.
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
+
+  const onFileDrop = async (event) => {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDropping(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    try {
+      await applyBoardFile(parseBoardFile(await file.text(), manifest), { client, store });
+    } catch (err) {
+      store.apply({
+        action: 'narrate',
+        tone: 'critical',
+        text: { en: err.message || 'That file could not be opened as a board.' },
+      });
+    }
+  };
+
+  // Depth counting, because dragenter/dragleave fire for every child element
+  // the pointer crosses and a naive boolean flickers the whole way across.
+  const onDragEnter = (event) => {
+    if (!event.dataTransfer?.types?.includes('Files')) return;
+    dragDepth.current += 1;
+    setDropping(true);
+  };
+  const onDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (!dragDepth.current) setDropping(false);
+  };
 
   // Keyboard undo/redo. Skipped while the caret is in the chat box, where
   // ctrl-z belongs to the text field and stealing it would be its own bug.
@@ -157,6 +203,14 @@ export default function BoardShell({
 
           <div className="spacer" />
 
+          <BoardFileMenu
+            store={store}
+            client={client}
+            state={state}
+            manifest={manifest}
+            health={health}
+          />
+
           {toolbarExtra}
 
           {state.selection.length > 0 && (
@@ -175,10 +229,16 @@ export default function BoardShell({
         {/* Clicking the board background clears the selection, the way clicking
             off a list does everywhere else. */}
         <div
-          className="board"
+          className={`board${dropping ? ' is-file-over' : ''}`}
           onClick={(event) => {
             if (event.target === event.currentTarget) store.clearSelection();
           }}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDragOver={(event) => {
+            if (event.dataTransfer?.types?.includes('Files')) event.preventDefault();
+          }}
+          onDrop={onFileDrop}
         >
           {narration && (
             <div className="board-narration" data-tone={narration.tone}>
