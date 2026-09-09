@@ -117,7 +117,7 @@ function build(root, { encoding, store, manifest, locale = 'en' }) {
     }
     row.appendChild(head);
 
-    if (dim.values?.length) row.appendChild(chips(dim, dimId, name, current, write, locale));
+    if (dim.values?.length) row.appendChild(chips(dim, dimId, name, current, write));
     else if (RANGE_TYPES.has(dim.type)) row.appendChild(range(dimId, name, current, write, dim));
     else row.appendChild(search(dimId, name, current, write));
 
@@ -159,7 +159,7 @@ function build(root, { encoding, store, manifest, locale = 'en' }) {
  * nothing and costs the person the feedback that makes direct manipulation
  * worth having.
  */
-function chips(dim, dimId, name, current, write, locale) {
+function chips(dim, dimId, name, current, write) {
   const picked = new Set(
     current ? (Array.isArray(current.value) ? current.value : [current.value]).map(String) : [],
   );

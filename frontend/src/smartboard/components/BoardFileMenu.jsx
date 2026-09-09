@@ -105,6 +105,14 @@ export default function BoardFileMenu({ store, client, state, manifest, health }
     await load(saved.parsed, 'Restored your last board');
   };
 
+  // Nothing here works without a catalog: the autosave slot is keyed by
+  // manifest name, and opening a file checks the panels against the viz kinds
+  // this deployment enables. The guard is here rather than at the top of the
+  // function because this component stays mounted while `manifest` goes from
+  // null to loaded — returning early before the hooks would change hook order
+  // on a live mount, which React refuses outright.
+  if (!manifest) return null;
+
   return (
     <div className="board-file" ref={menuRef}>
       <button

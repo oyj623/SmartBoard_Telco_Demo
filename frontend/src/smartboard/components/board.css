@@ -1079,6 +1079,18 @@ body.is-board-dragging * { cursor: inherit !important; }
    The drag grips are fast and imprecise; this is slow and exact. Both emit the
    same commands, so neither is the "real" one. */
 
+/* The panel clips its contents, so an absolutely positioned menu inside it
+   would be cut off — badly, on a short panel like a stat tile. Rather than
+   portalling the menu out to the body (and then owning its position through
+   every scroll and resize), the panel stops clipping for as long as its menu is
+   open, and lifts above its neighbours so the menu is not painted under the
+   panel to its right. Squared-off corners for the second a menu is open is a
+   cheaper price than a positioning system. */
+.board-panel.has-menu {
+  overflow: visible;
+  z-index: 5;
+}
+
 .board-panel-actions {
   position: relative;
   display: flex;

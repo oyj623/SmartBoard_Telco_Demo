@@ -197,6 +197,7 @@ export default function BoardPanel({
         arrange?.isDragging(panel.panelId) ? 'is-dragging' : '',
         arrange?.isResizing(panel.panelId) ? 'is-resizing' : '',
         dropEdge ? `drop-${dropEdge}` : '',
+        menuOpen ? 'has-menu' : '',
       ]
         .filter(Boolean)
         .join(' ')}
