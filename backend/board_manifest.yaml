@@ -570,6 +570,14 @@ viz:
     - table
     - map_points
     - map_regions
+    - filter_panel
+
+  # Kinds that render controls rather than data. They are drawn with no
+  # result_id, and `encoding.dims` names the dimensions they offer. Declaring
+  # them here is what lets the assistant place one — a filter the person drives
+  # is a thing the assistant can decide the board needs, not a fixture.
+  dataless:
+    - filter_panel
 
 commands:
   enabled:

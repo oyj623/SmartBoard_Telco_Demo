@@ -23,6 +23,7 @@ import { useBoard } from '../smartboard/components/useBoard.js'
 import { VizRegistry } from '../smartboard/client.js'
 import { registerAll } from '../smartboard/adapters/echarts.js'
 import { registerMaps } from '../smartboard/adapters/leaflet.js'
+import { registerControls } from '../smartboard/adapters/controls.js'
 import useAuthStore from '../store/authStore'
 import useTheme from '../hooks/useTheme'
 import demoScript from '../demoScript.js'
@@ -53,11 +54,13 @@ export default function Board() {
   // here; anything it names that is not registered simply does not render.
   const registry = useMemo(
     () =>
-      registerMaps(registerAll(new VizRegistry()), {
-        headers,
-        ...MAP_VIEW,
-        regions: { url: '/api/geo/states', featureKey: 'state_code' },
-      }),
+      registerControls(
+        registerMaps(registerAll(new VizRegistry()), {
+          headers,
+          ...MAP_VIEW,
+          regions: { url: '/api/geo/states', featureKey: 'state_code' },
+        }),
+      ),
     [headers],
   )
 
@@ -68,6 +71,7 @@ export default function Board() {
         title: { en: t('sections.headline') },
         subtitle: { en: t('sections.headlineSub') },
       },
+      { id: 'sec_controls', title: { en: t('sections.controls') } },
       { id: 'sec_network', title: { en: t('sections.network') } },
       { id: 'sec_commercial', title: { en: t('sections.commercial') } },
     ],
@@ -118,6 +122,21 @@ export default function Board() {
         encoding: { value: 'open_alarm_count' },
         title: { en: t('panels.openAlarms') },
         layout: { col_span: 3, section: 'sec_headline' },
+      },
+
+      // -- controls ---------------------------------------------------------
+      // A filter with no query behind it. It reads the catalog rather than a
+      // result, and clicking a chip emits the same `set_filter` the assistant
+      // emits — so the board can be narrowed by hand or by asking, and neither
+      // path is the special case. It is on the starting board because a control
+      // nobody knows exists is a control nobody uses.
+      {
+        panel_id: 'p_filters',
+        viz: 'filter_panel',
+        encoding: { dims: ['state', 'technology', 'plan', 'month'] },
+        title: { en: t('panels.filters') },
+        note: { en: t('panels.filtersNote') },
+        layout: { col_span: 12, section: 'sec_controls' },
       },
 
       // -- network ----------------------------------------------------------

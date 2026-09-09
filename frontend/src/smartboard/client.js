@@ -241,18 +241,47 @@ export function applyFilters(rows, columns, filters) {
 }
 
 function matches(value, { op, value: target }) {
-  const num = (v) => (typeof v === 'number' ? v : parseFloat(v));
   switch (op) {
     case '=':        return String(value) === String(target);
     case '!=':       return String(value) !== String(target);
     case 'in':       return (target || []).map(String).includes(String(value));
     case 'not_in':   return !(target || []).map(String).includes(String(value));
-    case '>':        return num(value) >  num(target);
-    case '>=':       return num(value) >= num(target);
-    case '<':        return num(value) <  num(target);
-    case '<=':       return num(value) <= num(target);
-    case 'between':  return num(value) >= num(target?.[0]) && num(value) <= num(target?.[1]);
+    case '>':        return compare(value, target) > 0;
+    case '>=':       return compare(value, target) >= 0;
+    case '<':        return compare(value, target) < 0;
+    case '<=':       return compare(value, target) <= 0;
+    case 'between':  return compare(value, target?.[0]) >= 0 && compare(value, target?.[1]) <= 0;
     case 'contains': return String(value ?? '').toLowerCase().includes(String(target).toLowerCase());
     default:         return true;
   }
 }
+
+/**
+ * A number only if it is entirely a number.
+ *
+ * `parseFloat` is too willing: it reads '2026-07' as 2026, so a month filter
+ * compared numerically found every month of the year equal to every other. The
+ * bug is invisible — the chart draws, it is simply filtered wrong — which is
+ * the kind worth a regex to prevent.
+ */
+const strictNumber = (v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
+  if (typeof v === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return parseFloat(v);
+  return NaN;
+};
+
+/**
+ * Order two filter operands: numeric when both really are numbers, otherwise
+ * lexicographic. Every time dimension in a catalog like this one is an ISO-ish
+ * string — '2026-07', '2026-07-14' — where lexicographic order is chronological
+ * order, so one rule covers both cases correctly.
+ */
+function compare(a, b) {
+  const na = strictNumber(a);
+  const nb = strictNumber(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb ? 0 : na < nb ? -1 : 1;
+  const sa = String(a ?? '');
+  const sb = String(b ?? '');
+  return sa === sb ? 0 : sa < sb ? -1 : 1;
+}
+

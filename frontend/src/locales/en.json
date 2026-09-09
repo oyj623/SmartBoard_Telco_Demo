@@ -31,7 +31,8 @@
     "headline": "Headline",
     "headlineSub": "Where the network stands against target",
     "network": "Network",
-    "commercial": "Customers and revenue"
+    "commercial": "Customers and revenue",
+    "controls": "Filters"
   },
   "panels": {
     "availability": "Site availability",
@@ -47,6 +48,8 @@
     "siteMap": "Sites by download speed",
     "siteMapNote": "Every mast on the network, sized and coloured by measured throughput.",
     "ticketMix": "Customer tickets",
-    "revenueMix": "Revenue by service line"
+    "revenueMix": "Revenue by service line",
+    "filters": "Filter the board",
+    "filtersNote": "Applies to every panel grouped by these dimensions. The assistant can set the same filters by name."
   }
 }

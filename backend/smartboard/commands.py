@@ -58,6 +58,14 @@ class Encoding(BaseModel):
     size: Optional[str] = None
     value: Optional[str] = None
     geo: Optional[str] = Field(default=None, description="Dimension carrying lat/lng or a feature key.")
+    dims: Optional[List[str]] = Field(
+        default=None,
+        max_length=6,
+        description=(
+            "Control kinds only: the dimensions a control panel exposes. Validated against the "
+            "catalog rather than against a result, because a control panel has no result."
+        ),
+    )
 
 
 class PanelStyle(BaseModel):
@@ -149,7 +157,13 @@ class Section(BaseModel):
 class AddPanel(BaseModel):
     action: Literal["add_panel"] = "add_panel"
     panel_id: str = Field(description="Stable id you choose, e.g. 'p_arpu_trend'. Reuse it to replace the panel.")
-    result_id: str = Field(description="A result_id returned by query_metrics.")
+    result_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "A result_id returned by query_metrics. Required for every kind that draws data — which is "
+            "all of them except the control kinds the manifest declares dataless."
+        ),
+    )
     viz: str = Field(description="A viz kind enabled in the manifest.")
     encoding: Encoding
     title: I18nText

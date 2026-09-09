@@ -188,6 +188,15 @@ class Engine:
             raise ManifestError(f"viz '{viz}' is not enabled (available: {', '.join(self.mf.viz_enabled)})")
 
         rid = getattr(cmd, "result_id", None)
+
+        # A panel is normally an answer, and an answer needs a result. The
+        # exception is narrow and declared: kinds listed under `viz.dataless`
+        # render controls, and a control has nothing to fetch. Leaving
+        # result_id optional in the model and enforcing it here keeps the rule
+        # in one place, next to the manifest that defines the exception.
+        if not rid and cmd.action == "add_panel" and viz not in self.mf.viz_dataless:
+            raise ManifestError(f"viz '{viz}' draws data and needs a result_id from query_metrics")
+
         if rid:
             if known_result_ids is not None and rid not in known_result_ids:
                 raise ManifestError(f"result_id '{rid}' was not produced in this turn")
@@ -195,6 +204,12 @@ class Engine:
                 raise ManifestError(f"result_id '{rid}' has expired — re-run query_metrics")
 
         enc = getattr(cmd, "encoding", None)
+
+        # `dims` names catalog dimensions, not result columns, so it is checked
+        # against the manifest whether or not there is a result behind it.
+        for did in (getattr(enc, "dims", None) or []) if enc else []:
+            self.mf.dimension(did)
+
         if enc and rid:
             stored = self.store.get(rid)
             if stored:

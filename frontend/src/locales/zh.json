@@ -31,7 +31,8 @@
     "headline": "关键指标",
     "headlineSub": "网络当前表现与目标对比",
     "network": "网络",
-    "commercial": "用户与收入"
+    "commercial": "用户与收入",
+    "controls": "筛选"
   },
   "panels": {
     "availability": "基站可用率",
@@ -47,6 +48,8 @@
     "siteMap": "基站下载速度分布",
     "siteMapNote": "全网基站，按实测速率着色与调整大小。",
     "ticketMix": "客服工单",
-    "revenueMix": "各业务线收入"
+    "revenueMix": "各业务线收入",
+    "filters": "筛选看板",
+    "filtersNote": "作用于按这些维度分组的所有面板。助手也能按名称设置相同的筛选条件。"
   }
 }
