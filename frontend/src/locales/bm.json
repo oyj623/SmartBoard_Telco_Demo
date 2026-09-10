@@ -31,7 +31,8 @@
     "headline": "Utama",
     "headlineSub": "Kedudukan rangkaian berbanding sasaran",
     "network": "Rangkaian",
-    "commercial": "Pelanggan dan hasil"
+    "commercial": "Pelanggan dan hasil",
+    "controls": "Penapis"
   },
   "panels": {
     "availability": "Kebolehsediaan tapak",
@@ -47,6 +48,8 @@
     "siteMap": "Tapak mengikut kelajuan muat turun",
     "siteMapNote": "Setiap tapak dalam rangkaian, disaiz dan diwarnakan mengikut kelajuan yang diukur.",
     "ticketMix": "Tiket pelanggan",
-    "revenueMix": "Hasil mengikut barisan perkhidmatan"
+    "revenueMix": "Hasil mengikut barisan perkhidmatan",
+    "filters": "Tapis papan",
+    "filtersNote": "Digunakan pada setiap panel yang dikumpulkan mengikut dimensi ini. Pembantu boleh menetapkan penapis yang sama mengikut nama."
   }
 }

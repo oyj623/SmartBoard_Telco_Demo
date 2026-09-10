@@ -78,7 +78,7 @@ Vite serves on <http://localhost:5173> and proxies `/api` to port 8000.
 python tests/test_board.py
 ```
 
-67 checks over the catalog, the compiler, entitlements, tenancy, injection
+71 checks over the catalog, the compiler, entitlements, tenancy, injection
 resistance, command validation and the turn loop — plus the four story arcs the
 demo script depends on, so a reseed that quietly flattens one of them fails here
 rather than on stage. No network and no model; the fallback brain drives the
@@ -150,11 +150,15 @@ data/
   ATTRIBUTION.md
 frontend/src/
   smartboard/                 vendored browser runtime, adapters and board UI
+    store.js                  one reducer, labelled undo/redo, transactions
+    boardFile.js              save and open a board — questions, not answers
+    components/useBoardLayout.js  drag to reorder, drag to resize
+    adapters/controls.js      the filter component
   pages/Board.jsx             the board — panels and map config as data
   pages/Login.jsx
   demoScript.js               the presenter's storyline and FAQ, as buttons
   locales/                    en · zh · bm
-tests/test_board.py           67 checks
+tests/test_board.py           71 checks
 ```
 
 ### How little of this is telco
@@ -174,6 +178,53 @@ know nothing about networks. What makes this a telco product:
 Point the same engine at a different manifest and it drives a different product.
 
 ---
+
+## You can also just use your hands
+
+The assistant can lay out the board. So can you, and it is the same operation
+either way — every gesture below emits one of the ten commands, through the one
+reducer, so nothing here is a second path into the state tree.
+
+- **Drag a panel** by the handle in its header to reorder it, or into another
+  section to move it there. **Drag its right or bottom edge** to resize it,
+  snapping to the twelve columns and the three row heights the schema allows.
+  Arrow keys do the same from the keyboard; shift-arrows reorder.
+- **Undo and redo** cover both kinds of change, and Undo names the one it will
+  take back. One gesture is one step: a drag across the board is a single entry,
+  and so is opening a board file that lands fourteen panels.
+- **The filter panel** is a component on the grid rather than chrome in the
+  toolbar. It reads the *catalog* — the dimensions the manifest declares become
+  chips and ranges — and writes `set_filter`, so the board can be narrowed by
+  hand or by asking. It also names the panels a filter cannot reach, because a
+  filter only bites on a panel whose result carries that column and silence
+  about that reads as a bug.
+- **Each panel's ⋯ menu** carries sort order and exact widths and heights. Sort
+  is per-panel because what *descending* means differs between a bar chart of
+  states and a line chart of months.
+
+Ask for any of it in words instead and the same commands run. That symmetry is
+the point: the assistant can restyle a panel you dragged, and you can undo a
+board it designed.
+
+## Saving a board
+
+**Board ▾ → Save to file** writes the layout and the *question behind each
+panel* — the IR, not the rows. Opening one re-runs every query, so:
+
+- a board you saved in March opens showing today's numbers, not March's;
+- results expire from a server-side cache after an hour, and the file does not
+  care, because it never referenced one;
+- **the import path is the guarded path.** Every query goes through the same
+  validate → guard → compile → scope → execute route a model-issued query takes.
+  Save a board as `hq`, open it as `north`, and it comes back without the
+  revenue panels — because the server refused them, not because the file was
+  polite. The panels that were refused are named on the board rather than
+  quietly missing.
+
+Drop a `.json` onto the board to open it. The last board is kept in
+`localStorage` and offered under **Restore last session** — offered, not
+restored automatically, because a demo that starts wherever the last session
+ended is a demo that starts differently every time.
 
 ## Two maps, and why there are two
 

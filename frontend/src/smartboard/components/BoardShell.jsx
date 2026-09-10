@@ -17,8 +17,13 @@
  * `extraFlags` rides along on every chat turn as the request's `extra` dict.
  */
 
+import { useEffect, useRef, useState } from 'react';
+
 import BoardChat from './BoardChat.jsx';
+import BoardFileMenu from './BoardFileMenu.jsx';
 import BoardPanel from './BoardPanel.jsx';
+import { useBoardLayout } from './useBoardLayout.js';
+import { applyBoardFile, autosaveBoard, parseBoardFile } from '../boardFile.js';
 import { t as pick } from '../client.js';
 import './board.css';
 
@@ -33,12 +38,14 @@ function groupIntoSections(panels, sections) {
   const known = new Map(sections.map((s) => [s.id, s]));
   const loose = panels.filter((p) => !p.layout?.section || !known.has(p.layout.section));
 
-  const bands = sections
-    .map((section) => ({
-      section,
-      panels: panels.filter((p) => p.layout?.section === section.id),
-    }))
-    .filter((band) => band.panels.length);
+  // Empty bands are kept. They used to be dropped as noise, but a section you
+  // can drag the last panel out of has to still be there to drag one back into
+  // — and a band the assistant declared and has not filled yet is a promise the
+  // board should keep visible.
+  const bands = sections.map((section) => ({
+    section,
+    panels: panels.filter((p) => p.layout?.section === section.id),
+  }));
 
   return loose.length ? [{ section: null, panels: loose }, ...bands] : bands;
 }
@@ -63,10 +70,82 @@ export default function BoardShell({
   const narration = state.narration.slice(-1)[0];
   const empty = labels.empty || {};
 
+  // Undo/redo labels are read during render. Every undo, redo and commit emits,
+  // so the snapshot React is subscribed to has already changed by the time
+  // these are read — they never go stale without a re-render behind them.
+  const undoLabel = store.undoLabel();
+  const redoLabel = store.redoLabel();
+
+  // Drag to reorder, drag to resize. Both emit `set_layout` — the same command
+  // the assistant emits when asked to redesign the board — so the two ways of
+  // changing the layout are literally the same operation, and Undo, the board
+  // snapshot the model sees, and export all get the mouse path for free.
+  const arrange = useBoardLayout({ store, state, locale });
+
+  // Autosave, debounced. Restoring is deliberately not automatic — see the note
+  // in boardFile.js — but losing a board to a stray refresh should not be
+  // possible either. Skipped while the board is still building itself, or the
+  // half-built starting board would overwrite a good save.
+  useEffect(() => {
+    if (booting || !manifest) return undefined;
+    const id = setTimeout(() => autosaveBoard(state, { manifest, health }), 1200);
+    return () => clearTimeout(id);
+  }, [state, booting, manifest, health]);
+
+  // Dropping a board file onto the board opens it. The panel drag uses pointer
+  // events rather than HTML5 drag-and-drop, so the two gestures cannot collide.
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
+
+  const onFileDrop = async (event) => {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDropping(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    try {
+      await applyBoardFile(parseBoardFile(await file.text(), manifest), { client, store });
+    } catch (err) {
+      store.apply({
+        action: 'narrate',
+        tone: 'critical',
+        text: { en: err.message || 'That file could not be opened as a board.' },
+      });
+    }
+  };
+
+  // Depth counting, because dragenter/dragleave fire for every child element
+  // the pointer crosses and a naive boolean flickers the whole way across.
+  const onDragEnter = (event) => {
+    if (!event.dataTransfer?.types?.includes('Files')) return;
+    dragDepth.current += 1;
+    setDropping(true);
+  };
+  const onDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (!dragDepth.current) setDropping(false);
+  };
+
+  // Keyboard undo/redo. Skipped while the caret is in the chat box, where
+  // ctrl-z belongs to the text field and stealing it would be its own bug.
+  useEffect(() => {
+    const onKey = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      event.preventDefault();
+      if (event.shiftKey) store.redo();
+      else store.undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [store]);
+
   const renderPanel = (panel) => (
     <BoardPanel
       key={panel.panelId}
       panel={panel}
+      arrange={arrange}
       client={client}
       registry={registry}
       store={store}
@@ -81,13 +160,25 @@ export default function BoardShell({
     <div className="board-shell">
       <div className="board-main">
         <div className="board-tools">
+          {/* Naming what will be undone costs one string and turns Undo from a
+              gamble into a decision. */}
           <button
             className="btn btn-ghost"
             style={{ fontSize: 10 }}
             onClick={() => store.undo()}
-            title="Step the board back one command — the assistant's or your own"
+            disabled={!undoLabel}
+            title={undoLabel ? `Undo: ${undoLabel}` : 'Nothing to undo'}
           >
-            Undo
+            ↺ Undo
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 10 }}
+            onClick={() => store.redo()}
+            disabled={!redoLabel}
+            title={redoLabel ? `Redo: ${redoLabel}` : 'Nothing to redo'}
+          >
+            ↻ Redo
           </button>
           <button
             className="btn btn-ghost"
@@ -112,6 +203,14 @@ export default function BoardShell({
 
           <div className="spacer" />
 
+          <BoardFileMenu
+            store={store}
+            client={client}
+            state={state}
+            manifest={manifest}
+            health={health}
+          />
+
           {toolbarExtra}
 
           {state.selection.length > 0 && (
@@ -130,10 +229,16 @@ export default function BoardShell({
         {/* Clicking the board background clears the selection, the way clicking
             off a list does everywhere else. */}
         <div
-          className="board"
+          className={`board${dropping ? ' is-file-over' : ''}`}
           onClick={(event) => {
             if (event.target === event.currentTarget) store.clearSelection();
           }}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDragOver={(event) => {
+            if (event.dataTransfer?.types?.includes('Files')) event.preventDefault();
+          }}
+          onDrop={onFileDrop}
         >
           {narration && (
             <div className="board-narration" data-tone={narration.tone}>
@@ -169,17 +274,36 @@ export default function BoardShell({
             </div>
           )}
 
-          {bands.map(({ section, panels: inBand }) => (
-            <div className="board-band" key={section?.id || '__loose'}>
-              {section && (
-                <header className="board-section-head">
-                  <h2>{pick(section.title, locale)}</h2>
-                  {section.subtitle && <p>{pick(section.subtitle, locale)}</p>}
-                </header>
-              )}
-              <div className="board-grid">{inBand.map(renderPanel)}</div>
-            </div>
-          ))}
+          {/* Bands only once something is on the board: three empty sections
+              stacked under "Nothing on the board" is noise, not structure. */}
+          {!!panels.length &&
+            bands.map(({ section, panels: inBand }) => (
+              <div
+                className={`board-band${
+                  arrange.isEmptyDropTarget(section?.id ?? null) ? ' is-drop-target' : ''
+                }`}
+                /* The drop hit-test reads the section off the DOM, so a panel
+                   dragged into a band lands in that band rather than merely
+                   between two panels that happen to sit in it. */
+                data-section={section?.id || ''}
+                key={section?.id || '__loose'}
+              >
+                {section && (
+                  <header className="board-section-head">
+                    <h2>{pick(section.title, locale)}</h2>
+                    {section.subtitle && <p>{pick(section.subtitle, locale)}</p>}
+                  </header>
+                )}
+                <div className={`board-grid${arrange.gridBusy ? ' is-arranging' : ''}`}>
+                  {inBand.map(renderPanel)}
+                  {!inBand.length && (
+                    <p className="board-band-empty">
+                      Empty section — drag a panel here, or ask the assistant to fill it.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
         </div>
       </div>
 

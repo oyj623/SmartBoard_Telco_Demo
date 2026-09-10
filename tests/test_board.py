@@ -325,6 +325,31 @@ check("unknown action refused", any("run_sql" in r["error"] for r in out.rejecte
 check("the removed ontology command is gone for good",
       any("add_object_panel" in r["error"] for r in out.rejected))
 
+# Control panels: the one kind that is drawn without a result. The exception is
+# declared in the manifest under `viz.dataless`, and it has to stay narrow — the
+# point of these three checks is that making it possible for a filter to have no
+# result_id did not make it optional for a chart.
+out = ENGINE.validate_commands(
+    [{"action": "add_panel", "panel_id": "p_ctl", "viz": "filter_panel",
+      "encoding": {"dims": ["state", "technology"]}, "title": {"en": "Filters"}}],
+    EXEC, known_result_ids=live,
+)
+check("a control panel is accepted with no result_id", len(out.accepted) == 1, out.rejected)
+
+out = ENGINE.validate_commands(
+    [
+        {"action": "add_panel", "panel_id": "p_e", "viz": "line",
+         "encoding": {"x": "month"}, "title": {"en": "x"}},
+        {"action": "add_panel", "panel_id": "p_f", "viz": "filter_panel",
+         "encoding": {"dims": ["not_a_dimension"]}, "title": {"en": "x"}},
+    ],
+    EXEC, known_result_ids=live,
+)
+check("a data panel still needs a result_id", any("needs a result_id" in r["error"] for r in out.rejected))
+check("a control panel's dims are checked against the catalog",
+      any("not_a_dimension" in r["error"] for r in out.rejected))
+check("both control-panel abuses rejected", len(out.rejected) == 2 and not out.accepted, out.rejected)
+
 # ---------------------------------------------------------------------------
 print("\nturn loop (heuristic brain, no network)")
 # ---------------------------------------------------------------------------

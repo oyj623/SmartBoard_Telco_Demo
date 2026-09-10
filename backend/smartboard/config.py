@@ -23,6 +23,11 @@ class AppConfig:
     title: Dict[str, str]
     source: Dict[str, Any] = field(default_factory=dict)
     viz_enabled: List[str] = field(default_factory=list)
+    # Kinds that render controls rather than data, and so are drawn without a
+    # result. A panel is normally an answer; some are the question. Declaring
+    # them keeps `add_panel` strict for everything else — result_id stays
+    # mandatory unless the kind is named here.
+    viz_dataless: List[str] = field(default_factory=list)
     commands_enabled: List[str] = field(default_factory=list)
     default_time_dim: Optional[str] = None
     max_rows: int = 5000
@@ -80,6 +85,7 @@ def config_from_dict(raw: Dict[str, Any]) -> AppConfig:
         title=_labels(raw.get("title"), raw["name"]),
         source=source,
         viz_enabled=list(raw.get("viz", {}).get("enabled", ["kpi", "line", "bar", "table"])),
+        viz_dataless=list(raw.get("viz", {}).get("dataless", [])),
         commands_enabled=list(raw.get("commands", {}).get("enabled", _all_command_types())),
         default_time_dim=raw.get("default_time_dim"),
         max_rows=int(limits.get("max_rows", 5000)),

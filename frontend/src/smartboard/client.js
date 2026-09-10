@@ -44,6 +44,10 @@ export class SmartBoardClient {
     this.manifest = null;
     this.health = null;
     this._results = new Map();
+    // result_id -> the IR that produced it. A result_id is a cache key with a
+    // TTL; the question behind it is the durable thing, and it is what a saved
+    // board replays. See boardFile.js.
+    this._irs = new Map();
     this._history = [];
   }
 
@@ -87,6 +91,11 @@ export class SmartBoardClient {
     return data;
   }
 
+  /** The query behind a result, if this client saw it go past. */
+  irFor(resultId) {
+    return this._irs.get(resultId) || null;
+  }
+
   /** Run IR directly, with no model in the loop. Same guarded path. */
   async query(ir) {
     const res = await fetch(`${this.baseUrl}/query`, {
@@ -97,6 +106,7 @@ export class SmartBoardClient {
     if (!res.ok) throw new Error((await res.json()).detail || 'query failed');
     const data = await res.json();
     this._results.set(data.result_id, data);
+    this._irs.set(data.result_id, ir);
     return data;
   }
 
@@ -147,8 +157,17 @@ export class SmartBoardClient {
           continue;
         }
 
+        if (event.type === 'result' && event.query) {
+          this._irs.set(event.result_id, event.query);
+        }
         if (event.type === 'command') {
-          const outcome = this.store.apply(event.command);
+          // Carry the IR onto the command so the panel records how it was
+          // built. The model never has to supply this and cannot forge it —
+          // it is looked up from a query the server already ran.
+          const command = event.command.result_id
+            ? { ...event.command, ir: this._irs.get(event.command.result_id) || undefined }
+            : event.command;
+          const outcome = this.store.apply(command);
           if (!outcome.ok) event.clientError = outcome.error;
         }
         if (event.type === 'done' && Array.isArray(event.messages)) {
@@ -162,6 +181,7 @@ export class SmartBoardClient {
   clearHistory() {
     this._history = [];
     this._results.clear();
+    this._irs.clear();
   }
 }
 
@@ -221,18 +241,47 @@ export function applyFilters(rows, columns, filters) {
 }
 
 function matches(value, { op, value: target }) {
-  const num = (v) => (typeof v === 'number' ? v : parseFloat(v));
   switch (op) {
     case '=':        return String(value) === String(target);
     case '!=':       return String(value) !== String(target);
     case 'in':       return (target || []).map(String).includes(String(value));
     case 'not_in':   return !(target || []).map(String).includes(String(value));
-    case '>':        return num(value) >  num(target);
-    case '>=':       return num(value) >= num(target);
-    case '<':        return num(value) <  num(target);
-    case '<=':       return num(value) <= num(target);
-    case 'between':  return num(value) >= num(target?.[0]) && num(value) <= num(target?.[1]);
+    case '>':        return compare(value, target) > 0;
+    case '>=':       return compare(value, target) >= 0;
+    case '<':        return compare(value, target) < 0;
+    case '<=':       return compare(value, target) <= 0;
+    case 'between':  return compare(value, target?.[0]) >= 0 && compare(value, target?.[1]) <= 0;
     case 'contains': return String(value ?? '').toLowerCase().includes(String(target).toLowerCase());
     default:         return true;
   }
 }
+
+/**
+ * A number only if it is entirely a number.
+ *
+ * `parseFloat` is too willing: it reads '2026-07' as 2026, so a month filter
+ * compared numerically found every month of the year equal to every other. The
+ * bug is invisible — the chart draws, it is simply filtered wrong — which is
+ * the kind worth a regex to prevent.
+ */
+const strictNumber = (v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
+  if (typeof v === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return parseFloat(v);
+  return NaN;
+};
+
+/**
+ * Order two filter operands: numeric when both really are numbers, otherwise
+ * lexicographic. Every time dimension in a catalog like this one is an ISO-ish
+ * string — '2026-07', '2026-07-14' — where lexicographic order is chronological
+ * order, so one rule covers both cases correctly.
+ */
+function compare(a, b) {
+  const na = strictNumber(a);
+  const nb = strictNumber(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb ? 0 : na < nb ? -1 : 1;
+  const sa = String(a ?? '');
+  const sb = String(b ?? '');
+  return sa === sb ? 0 : sa < sb ? -1 : 1;
+}
+

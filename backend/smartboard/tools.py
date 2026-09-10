@@ -133,6 +133,12 @@ def _encoding_schema(mf: Manifest) -> Dict[str, Any]:
             "size": {"type": "string", "enum": sorted(mf.metrics)},
             "value": {"type": "string", "enum": sorted(mf.metrics), "description": "The measure for kpi/gauge/map fill."},
             "geo": {"type": "string", "enum": ids, "description": "Dimension carrying map features."},
+            "dims": {
+                "type": "array",
+                "items": {"type": "string", "enum": sorted(mf.dimensions)},
+                "maxItems": 6,
+                "description": "Control kinds only: which dimensions the control panel offers.",
+            },
         },
         "additionalProperties": False,
     }
@@ -227,6 +233,16 @@ def commands_tool(mf: Manifest) -> Dict[str, Any]:
             "When asked to redesign or reorganise, emit one set_layout that describes the finished "
             "board rather than a run of small moves.\n"
             "\n"
+            + (
+                "\n"
+                "CONTROLS. " + ", ".join(mf.viz_dataless) + " render controls rather than data. Add one with "
+                "add_panel, no result_id, and encoding.dims naming the dimensions it should offer — the "
+                "person then filters the whole board by hand. Reach for one when someone asks to be able to "
+                "explore or slice for themselves, rather than asking you each time.\n"
+                if mf.viz_dataless
+                else ""
+            )
+            + "\n"
             "If the request is ambiguous in a way that changes the answer, emit a single "
             "ask_clarification command instead of guessing."
         ),
@@ -242,7 +258,13 @@ def commands_tool(mf: Manifest) -> Dict[str, Any]:
                         "properties": {
                             "action": {"type": "string", "enum": enabled},
                             "panel_id": {"type": "string", "description": "Stable snake_case id, e.g. 'p_arpu_trend'."},
-                            "result_id": {"type": "string", "description": "From a prior query_metrics call."},
+                            "result_id": {
+                                "type": "string",
+                                "description": (
+                                    "From a prior query_metrics call. Required for every kind that draws "
+                                    "data; omit it only for a control kind."
+                                ),
+                            },
                             "viz": {"type": "string", "enum": mf.viz_enabled},
                             "encoding": enc,
                             "title": i18n,

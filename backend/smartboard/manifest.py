@@ -72,6 +72,7 @@ class Manifest:
     dimensions: Dict[str, Dimension]
     viz_enabled: List[str]
     commands_enabled: List[str]
+    viz_dataless: List[str] = field(default_factory=list)
     default_time_dim: Optional[str] = None
     max_rows: int = 5000
     statement_timeout_ms: int = 5000
@@ -149,6 +150,7 @@ class Manifest:
                 for d in self.dimensions.values()
             ],
             "viz": self.viz_enabled,
+            "viz_dataless": self.viz_dataless,
             "commands": self.commands_enabled,
             "glossary": self.glossary,
         }
@@ -168,6 +170,7 @@ def _assemble(config: AppConfig, catalog: Catalog) -> Manifest:
         dimensions=catalog.dimensions,
         viz_enabled=config.viz_enabled,
         commands_enabled=config.commands_enabled,
+        viz_dataless=config.viz_dataless,
         default_time_dim=config.default_time_dim,
         max_rows=config.max_rows,
         statement_timeout_ms=config.statement_timeout_ms,

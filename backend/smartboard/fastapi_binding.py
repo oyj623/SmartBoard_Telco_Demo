@@ -138,6 +138,9 @@ def create_board_router(
             "locales": manifest.locales,
             "currency": manifest.currency,
             "viz": manifest.viz_enabled,
+            # Which of those kinds render controls rather than data. The browser
+            # needs it to know a panel with no result is expected rather than broken.
+            "viz_dataless": manifest.viz_dataless,
             "commands": manifest.commands_enabled,
             "suggestions": manifest.suggestions,
             "glossary": manifest.glossary,

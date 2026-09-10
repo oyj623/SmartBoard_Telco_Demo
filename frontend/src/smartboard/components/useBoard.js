@@ -77,26 +77,34 @@ export function useBoard({
         const wanted = panelFilter ? panels.filter((p) => panelFilter(p, hl)) : panels;
 
         // Fetched in parallel; drawn in declared order so the board does not
-        // shuffle itself depending on which query returned first.
+        // shuffle itself depending on which query returned first. A panel with
+        // no `ir` is a control kind — it draws from the catalog rather than
+        // from rows, so there is nothing to fetch and nothing to wait for.
         const results = await Promise.all(
           wanted.map((p) =>
-            client.query(p.ir).then(
-              (r) => ({ panel: p, result: r }),
-              (err) => ({ panel: p, error: err }),
-            ),
+            p.ir
+              ? client.query(p.ir).then(
+                  (r) => ({ panel: p, result: r }),
+                  (err) => ({ panel: p, error: err }),
+                )
+              : Promise.resolve({ panel: p, result: null }),
           ),
         );
         if (cancelled) return;
 
         for (const { panel, result, error } of results) {
-          if (error || !result) {
+          if (error || (panel.ir && !result)) {
             console.warn(`default panel ${panel.panel_id} skipped:`, error?.message);
             continue;
           }
           store.apply({
             action: 'add_panel',
             panel_id: panel.panel_id,
-            result_id: result.result_id,
+            result_id: result?.result_id,
+            // Recorded so the starting board is as exportable as one the
+            // assistant built. Both go through the same reducer; neither is a
+            // special case.
+            ir: panel.ir,
             viz: panel.viz,
             encoding: panel.encoding,
             title: panel.title,

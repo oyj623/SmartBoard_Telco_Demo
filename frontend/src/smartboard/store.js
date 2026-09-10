@@ -8,10 +8,17 @@
  *
  * Framework-free on purpose. `react.js` wraps this in a hook; a Vue or Svelte
  * binding would be about fifteen lines.
+ *
+ * UNDO IS A HISTORY OF INTENTIONS, NOT OF STATES. One thing a person did is one
+ * step back, whatever it cost internally: a drag across the board is one entry,
+ * and so is importing a board file that lands fourteen panels. That is why
+ * `commit` takes a label and why `applyAll` can coalesce. A stack that recorded
+ * every intermediate state would be technically faithful and practically
+ * useless — forty entries deep, one drag would erase your afternoon.
  */
 
 const INITIAL = {
-  panels: [],          // [{ panelId, resultId, viz, encoding, title, subtitle, note, size, style, layout }]
+  panels: [],          // [{ panelId, resultId, ir, viz, encoding, title, subtitle, note, size, style, layout }]
   order: [],           // panelIds, render order
   sections: [],        // [{ id, title, subtitle, collapsed }] — the board's design
   globalFilters: [],   // [{ dim, op, value }]
@@ -35,25 +42,75 @@ function normaliseLayout(cmd, previous) {
   };
 }
 
+/**
+ * A human label for one change, for the Undo button's tooltip.
+ *
+ * Deliberately terse and deliberately in the vocabulary of the board rather
+ * than of the code: a person about to press Undo wants to know they are about
+ * to un-resize a panel, not that they are about to pop a `set_layout`.
+ */
+function describe(event) {
+  if (!event) return 'change';
+  if (event.type === 'reset') return 'clear the board';
+  const cmd = event.command;
+  if (!cmd) return 'change';
+  const which = cmd.panel_id ? ` “${cmd.panel_id}”` : '';
+  switch (cmd.action) {
+    case 'add_panel':       return `add${which}`;
+    case 'update_panel':    return `change${which}`;
+    case 'remove_panel':    return `remove${which}`;
+    case 'set_filter':      return `filter on ${cmd.filter?.dim ?? ''}`.trim();
+    case 'clear_filters':   return cmd.dims ? `clear the ${cmd.dims.join(', ')} filter` : 'clear all filters';
+    case 'highlight':       return 'highlight';
+    case 'focus_map':       return 'move the map';
+    case 'set_layout':      return 'rearrange the board';
+    case 'narrate':         return 'narration';
+    default:                return cmd.action.replace(/_/g, ' ');
+  }
+}
+
 export function createStore(initial = {}) {
   let state = { ...structuredClone(INITIAL), ...initial };
   const listeners = new Set();
+
+  // Two stacks of { state, label }. The label is what the toolbar shows, so a
+  // person can read what Undo is about to do before they do it — the single
+  // cheapest thing you can add to make an undoable surface feel safe.
   const undoStack = [];
+  const redoStack = [];
   let highlightTimer = null;
+  let batching = false;
 
   const emit = (event) => {
     for (const fn of listeners) fn(state, event);
   };
 
-  const commit = (next, event) => {
-    undoStack.push(state);
+  const commit = (next, event, label = null) => {
+    if (batching) {
+      // Inside a transaction the undo entry was taken when it opened; the
+      // commits within it are steps of one thing the person did, not things.
+      state = next;
+      emit(event);
+      return;
+    }
+    undoStack.push({ state, label: label || describe(event) });
     if (undoStack.length > 40) undoStack.shift();
+    // A new change forks the timeline. Anything that was redoable is now a
+    // future that did not happen, and keeping it around would let Redo apply a
+    // change the person has already moved past.
+    redoStack.length = 0;
     state = next;
     emit(event);
   };
 
-  /** Apply one command. Returns { ok, error } — never throws at the caller. */
-  function apply(cmd) {
+  /**
+   * Apply one command. Returns { ok, error } — never throws at the caller.
+   *
+   * `label` overrides what Undo will call this. Pass it when the command is a
+   * poor description of the gesture that produced it: a drag emits `set_layout`,
+   * but the person resized a panel.
+   */
+  function apply(cmd, label = null) {
     const next = structuredClone(state);
     try {
       switch (cmd.action) {
@@ -62,6 +119,12 @@ export function createStore(initial = {}) {
           const panel = {
             panelId: cmd.panel_id,
             resultId: cmd.result_id,
+            // The query that produced this panel, when the caller knows it.
+            // Results live in a server-side cache with a one-hour TTL, so a
+            // result_id is worthless tomorrow; the IR is what makes a board
+            // portable — see boardFile.js. Kept off `boardState()` so it costs
+            // the model nothing.
+            ir: cmd.ir ?? prior?.ir ?? null,
             viz: cmd.viz,
             encoding: cmd.encoding || {},
             title: cmd.title || { en: cmd.panel_id },
@@ -108,6 +171,7 @@ export function createStore(initial = {}) {
           if (cmd.subtitle) p.subtitle = cmd.subtitle;
           if (cmd.note) p.note = cmd.note;
           if (cmd.result_id) p.resultId = cmd.result_id;
+          if (cmd.ir) p.ir = cmd.ir;
           if (cmd.size) {
             p.size = cmd.size;
             p.layout = { ...p.layout, colSpan: SIZE_SPAN[cmd.size] ?? p.layout.colSpan };
@@ -213,8 +277,33 @@ export function createStore(initial = {}) {
       return { ok: false, error: err.message };
     }
 
-    commit(next, { type: 'command', command: cmd });
+    commit(next, { type: 'command', command: cmd }, label);
     return { ok: true };
+  }
+
+  /**
+   * Run several commands as one undoable step.
+   *
+   * Synchronous by design: everything slow — fetching results for an imported
+   * board, say — happens before the transaction opens, so the board never sits
+   * half-built inside one. `fn` receives nothing and should call `apply`.
+   */
+  function transaction(label, fn) {
+    if (batching) return fn();          // a nested transaction joins the outer one
+    const before = state;
+    batching = true;
+    try {
+      return fn();
+    } finally {
+      batching = false;
+      // Nothing changed, nothing to undo. A transaction that applied only
+      // rejected commands should not leave a dead step on the stack.
+      if (state !== before) {
+        undoStack.push({ state: before, label });
+        if (undoStack.length > 40) undoStack.shift();
+        redoStack.length = 0;
+      }
+    }
   }
 
   /**
@@ -271,16 +360,44 @@ export function createStore(initial = {}) {
     panelHasSelection(panelId) {
       return state.selection.some((e) => e.panelId === panelId);
     },
-    applyAll(cmds) {
-      return cmds.map(apply);
+    /**
+     * Apply a list of commands. With a `label` they collapse into one undo
+     * step; without one each command is its own step, which is what a
+     * conversational turn wants — the assistant drawing three panels is three
+     * things it did, and you may want only the last one gone.
+     */
+    applyAll(cmds, label = null) {
+      return label ? transaction(label, () => cmds.map((c) => apply(c))) : cmds.map((c) => apply(c));
     },
+    transaction,
     undo() {
-      const prev = undoStack.pop();
-      if (!prev) return false;
-      state = prev;
-      emit({ type: 'undo' });
+      const entry = undoStack.pop();
+      if (!entry) return false;
+      redoStack.push({ state, label: entry.label });
+      state = entry.state;
+      emit({ type: 'undo', label: entry.label });
       return true;
     },
+    /**
+     * Step forward again.
+     *
+     * Undo without redo is a trap on a surface you can drag: a misdrop is
+     * cheap to undo and expensive to re-do by hand, and knowing you can step
+     * back is what makes people willing to try the gesture at all.
+     */
+    redo() {
+      const entry = redoStack.pop();
+      if (!entry) return false;
+      undoStack.push({ state, label: entry.label });
+      state = entry.state;
+      emit({ type: 'redo', label: entry.label });
+      return true;
+    },
+    canUndo: () => undoStack.length > 0,
+    canRedo: () => redoStack.length > 0,
+    /** What Undo would step back — shown in its tooltip, so the button is never a gamble. */
+    undoLabel: () => undoStack[undoStack.length - 1]?.label || null,
+    redoLabel: () => redoStack[redoStack.length - 1]?.label || null,
     reset() {
       commit(structuredClone(INITIAL), { type: 'reset' });
     },

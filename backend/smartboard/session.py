@@ -139,6 +139,14 @@ def run_turn(
                         "columns": handle.columns,
                         "dataset": stored.dataset if stored else "",
                         "elapsed_ms": handle.elapsed_ms,
+                        # The IR that produced this result, echoed back so the
+                        # browser can remember how a panel was built. Results
+                        # live in a cache with a TTL; the question that made one
+                        # does not expire, and it is what lets a board be saved
+                        # to a file and opened tomorrow. This is the model's own
+                        # validated arguments travelling outward — it grants no
+                        # capability the model did not already exercise.
+                        "query": tc.arguments,
                     }
                     payload = handle.model_dump()
                     payload["dataset"] = stored.dataset if stored else ""
